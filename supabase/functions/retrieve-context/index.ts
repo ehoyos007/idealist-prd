@@ -1,0 +1,165 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+async function extractQueryKeywords(query: string, apiKey: string): Promise<string[]> {
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          {
+            role: "system",
+            content: `Extract the key search terms from the user's query. Focus on nouns, concepts, and specific terms that would help find relevant document chunks. Return ONLY a JSON array of lowercase keywords.
+Example input: "What does the document say about revenue projections?"
+Example output: ["revenue", "projections", "financial", "forecast"]`
+          },
+          {
+            role: "user",
+            content: query
+          }
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Query keyword extraction failed:", response.status);
+      return query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "[]";
+    
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```json')) cleanContent = cleanContent.slice(7);
+    if (cleanContent.startsWith('```')) cleanContent = cleanContent.slice(3);
+    if (cleanContent.endsWith('```')) cleanContent = cleanContent.slice(0, -3);
+    
+    const keywords = JSON.parse(cleanContent.trim());
+    return Array.isArray(keywords) ? keywords.map((k: string) => k.toLowerCase()) : [];
+  } catch (error) {
+    console.error("Error extracting query keywords:", error);
+    // Fallback: simple word extraction
+    return query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { query, sessionId, limit = 3 } = await req.json();
+
+    if (!query || !sessionId) {
+      throw new Error('Missing required fields: query, sessionId');
+    }
+
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Missing required environment variables');
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    console.log(`Retrieving context for session: ${sessionId}, query: "${query.substring(0, 50)}..."`);
+
+    // Extract keywords from query
+    const queryKeywords = await extractQueryKeywords(query, LOVABLE_API_KEY);
+    console.log(`Query keywords: ${queryKeywords.join(', ')}`);
+
+    if (queryKeywords.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, chunks: [], message: 'No keywords extracted' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Build search query - combine full-text search with keyword array overlap
+    // First, get chunks with matching keywords
+    const { data: keywordMatches, error: keywordError } = await supabase
+      .from('document_chunks')
+      .select('id, file_name, chunk_index, chunk_text, keywords')
+      .eq('session_id', sessionId)
+      .overlaps('keywords', queryKeywords);
+
+    if (keywordError) {
+      console.error('Keyword search error:', keywordError);
+    }
+
+    // Also do a full-text search on chunk_text
+    const searchTerms = queryKeywords.join(' | ');
+    const { data: textMatches, error: textError } = await supabase
+      .from('document_chunks')
+      .select('id, file_name, chunk_index, chunk_text, keywords')
+      .eq('session_id', sessionId)
+      .textSearch('chunk_text', searchTerms, { type: 'websearch' });
+
+    if (textError) {
+      console.error('Text search error:', textError);
+    }
+
+    // Combine and deduplicate results
+    const allMatches = [...(keywordMatches || []), ...(textMatches || [])];
+    const uniqueMatches = new Map();
+    
+    for (const match of allMatches) {
+      if (!uniqueMatches.has(match.id)) {
+        // Score based on keyword overlap
+        const matchingKeywords = match.keywords?.filter((k: string) => 
+          queryKeywords.includes(k.toLowerCase())
+        ) || [];
+        const score = matchingKeywords.length;
+        
+        uniqueMatches.set(match.id, { ...match, score });
+      } else {
+        // Boost score if found in both searches
+        const existing = uniqueMatches.get(match.id);
+        existing.score += 1;
+      }
+    }
+
+    // Sort by score and take top N
+    const rankedChunks = Array.from(uniqueMatches.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ id, file_name, chunk_index, chunk_text }) => ({
+        id,
+        fileName: file_name,
+        chunkIndex: chunk_index,
+        text: chunk_text
+      }));
+
+    console.log(`Found ${rankedChunks.length} relevant chunks`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        chunks: rankedChunks,
+        queryKeywords
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error retrieving context:', errorMessage);
+    return new Response(
+      JSON.stringify({ success: false, error: errorMessage, chunks: [] }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

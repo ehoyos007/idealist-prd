@@ -1,0 +1,19 @@
+project_id = "cbeurhcgvqptclggkbhb"
+
+[functions.elevenlabs-token]
+verify_jwt = false
+
+[functions.synthesize-project]
+verify_jwt = false
+
+[functions.parse-file-context]
+verify_jwt = false
+
+[functions.chunk-and-index]
+verify_jwt = false
+
+[functions.retrieve-context]
+verify_jwt = false
+
+[functions.link-documents-to-project]
+verify_jwt = false
