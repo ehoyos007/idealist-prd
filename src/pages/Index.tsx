@@ -14,7 +14,7 @@ const Index = () => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [remixProjectId, setRemixProjectId] = useState<string | null>(null);
-  const { projects, saveProject, deleteProject, getProject } = useProjectsStorage();
+  const { projects, saveProject, saveDraftProject, deleteProject, getProject } = useProjectsStorage();
 
   const handleStartSession = () => {
     setRemixProjectId(null);
@@ -31,6 +31,12 @@ const Index = () => {
   const handleSessionCancel = () => {
     setRemixProjectId(null);
     setCurrentView('home');
+  };
+
+  const handleDraftSaved = (projectId: string) => {
+    setRemixProjectId(null);
+    setSelectedProjectId(projectId);
+    setCurrentView('project');
   };
 
   const handleSelectProject = (id: string) => {
@@ -70,6 +76,8 @@ const Index = () => {
             <SessionView
               onComplete={handleSessionComplete}
               onCancel={handleSessionCancel}
+              onDraftSaved={handleDraftSaved}
+              saveDraftProject={saveDraftProject}
               remixProject={remixProject}
             />
           )}

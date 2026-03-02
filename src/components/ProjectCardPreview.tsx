@@ -19,6 +19,7 @@ export function ProjectCardPreview({ project, onClick }: ProjectCardPreviewProps
     (project.scores.complexity + project.scores.impact + project.scores.urgency + project.scores.confidence) / 4
   );
 
+  const isDraft = project.projectName === 'Generating...';
   const excerpt = project.problemStatement || project.vision;
 
   return (
@@ -43,7 +44,9 @@ export function ProjectCardPreview({ project, onClick }: ProjectCardPreviewProps
                 </Tooltip>
               </TooltipProvider>
             )}
-            <CardTitle className="text-lg font-bold line-clamp-2">{project.projectName}</CardTitle>
+            <CardTitle className="text-lg font-bold line-clamp-2">
+              {isDraft ? 'Draft Project' : project.projectName}
+            </CardTitle>
           </div>
           <div className="flex-shrink-0 w-10 h-10 border-2 border-primary flex items-center justify-center font-mono font-bold">
             {avgScore}
@@ -53,6 +56,11 @@ export function ProjectCardPreview({ project, onClick }: ProjectCardPreviewProps
           <p className="text-sm text-muted-foreground">{project.tagline}</p>
         )}
         <div className="flex flex-wrap gap-1 mt-2">
+          {isDraft && (
+            <Badge variant="secondary" className="text-xs font-mono bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
+              Draft
+            </Badge>
+          )}
           {project.tags.slice(0, 3).map((tag, index) => (
             <Badge key={index} variant="outline" className="text-xs font-mono">
               {tag}

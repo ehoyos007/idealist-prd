@@ -6,13 +6,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Pencil, Save, X, Copy, Download, FileText, Film, Trash2, MoreVertical, Sparkles, Files, FolderArchive } from 'lucide-react';
+import { Pencil, Save, X, Copy, Download, FileText, Film, Trash2, MoreVertical, Sparkles, Files, FolderArchive, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 import { generatePdf } from '@/lib/generatePdf';
 import { generateProjectZip } from '@/lib/generateProjectZip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sheet,
   SheetContent,
@@ -35,6 +36,7 @@ export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix }: 
   const [isEditing, setIsEditing] = useState(false);
   const [editedProject, setEditedProject] = useState<ProjectCard>(project);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const { toast } = useToast();
   const { theme: appTheme } = useTheme();
   const isMobile = useIsMobile();
@@ -49,6 +51,44 @@ export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix }: 
   const handleCancel = () => {
     setEditedProject(project);
     setIsEditing(false);
+  };
+
+  const isDraft = project.projectName === 'Generating...' && !!project.transcript;
+
+  const handleRetryGeneration = async () => {
+    if (!project.transcript) return;
+    setIsRetrying(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('synthesize-project', {
+        body: { transcript: project.transcript }
+      });
+
+      if (invokeError) throw new Error(invokeError.message);
+      if (!data?.projectCard) throw new Error('No project card generated');
+
+      const updatedProject: ProjectCard = {
+        ...data.projectCard,
+        id: project.id,
+        transcript: project.transcript,
+        remixedFromId: project.remixedFromId,
+        remixedFromTitle: project.remixedFromTitle,
+        createdAt: project.createdAt,
+        updatedAt: new Date().toISOString()
+      };
+
+      onSave(updatedProject);
+      setEditedProject(updatedProject);
+      toast({ title: "Project card generated!", description: "Your conversation has been synthesized into a structured PRD." });
+    } catch (err) {
+      console.error('Retry generation failed:', err);
+      toast({
+        title: "Generation failed",
+        description: err instanceof Error ? err.message : "Failed to generate project card. Try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   const handleDelete = () => {
@@ -267,6 +307,23 @@ ${p.firstSprintPlan}
 
   return (
     <div className="h-full flex flex-col">
+      {/* Draft banner */}
+      {isDraft && (
+        <div className="mb-4 border-2 border-yellow-500/50 bg-yellow-500/10 p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="font-mono text-sm font-bold">Draft — Generation incomplete</p>
+            <p className="text-sm text-muted-foreground">Your transcript was saved. Retry to generate the full project card.</p>
+          </div>
+          <Button onClick={handleRetryGeneration} disabled={isRetrying} className="font-mono flex-shrink-0">
+            {isRetrying ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating...</>
+            ) : (
+              <><RefreshCw className="h-4 w-4 mr-2" />Retry Generation</>
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex-1 min-w-0">

@@ -74,6 +74,29 @@ export function useProjectsStorage() {
     }
   }, []);
 
+  const saveDraftProject = useCallback(async (id: string, transcript: string) => {
+    try {
+      const { error } = await supabase
+        .from('prd_projects')
+        .insert({
+          id,
+          project_name: 'Generating...',
+          transcript,
+          tags: [],
+          score_complexity: 5,
+          score_impact: 5,
+          score_urgency: 5,
+          score_confidence: 5,
+        });
+
+      if (error) {
+        console.warn('Failed to save draft project:', error);
+      }
+    } catch (err) {
+      console.warn('Failed to save draft project:', err);
+    }
+  }, []);
+
   const deleteProject = useCallback(async (id: string) => {
     const { error } = await supabase.from('prd_projects').delete().eq('id', id);
 
@@ -90,5 +113,5 @@ export function useProjectsStorage() {
     [projects]
   );
 
-  return { projects, isLoading, saveProject, deleteProject, getProject };
+  return { projects, isLoading, saveProject, saveDraftProject, deleteProject, getProject };
 }

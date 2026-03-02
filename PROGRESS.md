@@ -1,5 +1,39 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 11 — Transcript Recovery & Draft Safety Net)
+
+**Summary:** Built transcript recovery edge function and implemented draft-save safety net to prevent future transcript loss when synthesis fails.
+
+### What was done
+
+**Part 1 — Recovery Edge Function**
+- **Created** `supabase/functions/recover-transcript/index.ts` — temporary edge function that lists recent ElevenLabs conversations for the agent, fetches full transcript for the most recent (or specified) conversation, and returns formatted transcript matching `getTranscript()` format (`User: ...\n\nAI: ...`)
+- **Updated** `supabase/config.toml` with `[functions.recover-transcript]` entry
+- Supports optional `{ conversationId }` body param to target a specific conversation; defaults to most recent
+
+**Part 2 — Prevent Future Transcript Loss (5 files modified)**
+- **`useProjectsStorage.ts`**: Added `saveDraftProject(id, transcript)` — inserts a minimal DB row (`project_name: 'Generating...'`, transcript, default scores) before synthesis. Non-fatal: logs warning on failure, never throws.
+- **`SessionView.tsx`**: Moved `projectId = crypto.randomUUID()` before synthesis call. Now calls `saveDraftProject(projectId, transcript)` before `synthesize-project`. On failure: shows "Your transcript has been saved. You can retry from your library." toast and navigates to draft project view via `onDraftSaved` prop.
+- **`Index.tsx`**: Wired `saveDraftProject` and new `handleDraftSaved` handler (navigates to project detail view) to `<SessionView>`.
+- **`ProjectCardFull.tsx`**: Added yellow "Draft — Generation incomplete" banner with **Retry Generation** button for draft projects (`projectName === 'Generating...'` && `transcript` exists). Calls `synthesize-project` with saved transcript, updates project on success via `onSave()`.
+- **`ProjectCardPreview.tsx`**: Shows "Draft" badge and "Draft Project" title on preview cards for incomplete projects.
+
+### Build verification
+- `tsc --noEmit` — 0 errors
+- `vite build` — clean (2184 modules, 3.96s)
+
+**Part 3 — Recovery Execution**
+- Deployed `recover-transcript` edge function, invoked it — retrieved full 22-message transcript from ElevenLabs
+- Called `synthesize-project` with recovered transcript — generated **"YouTube Content Analyzer"** PRD card (scores: complexity 4, impact 8, urgency 6, confidence 9)
+- Inserted project into `prd_projects` (id: `44f80edd-a22b-41e5-8509-966e3e7516cc`)
+- Cleaned up: removed `recover-transcript/` directory, config.toml entry, and deleted function from Supabase remote
+
+### What remains
+- Deploy frontend changes to Vercel (auto on push)
+- Test safety net: start voice session, interrupt synthesis, confirm draft row + retry button works
+
+---
+
 ## Session: 2026-03-02 (Session 10 — Realtime Bug Fix)
 
 **Summary:** Fixed Supabase realtime subscriptions not delivering events. Root cause: missing `REPLICA IDENTITY FULL` on `prd_projects` table.

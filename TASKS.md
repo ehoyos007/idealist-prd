@@ -44,6 +44,22 @@
 - [x] Test export buttons — Copy (toast: "Copied!"), Download .md (toast: "Downloaded!"), PDF (toast: "PDF Downloaded!"), Zip (toast: "Project Kit Downloaded!"). Zip generates CONTEXT.md, TASKS.md, PLAN.md, CLAUDE.md.
 - [x] Test remix UI flow (non-voice) — Sparkles button exists, SessionView loads with "Remixing: Satori..." badge, button says "Start Remixing", Cancel returns to home, elevenlabs-token returns signed URL + overrideConfig with projectContext.
 
+## Completed (Transcript Safety)
+- [x] Create `recover-transcript` edge function for ElevenLabs conversation history retrieval
+- [x] Add `saveDraftProject()` to `useProjectsStorage` — persists transcript before synthesis
+- [x] Refactor `SessionView.handleEnd()` — draft save before synthesis, navigate to draft on failure
+- [x] Wire `saveDraftProject` and `onDraftSaved` in `Index.tsx`
+- [x] Add "Retry Generation" banner + button in `ProjectCardFull` for draft projects
+- [x] Add "Draft" badge on `ProjectCardPreview` for incomplete projects
+- [x] Fix `.trim()` on Supabase env vars in `client.ts` (trailing `%0A` was breaking API calls)
+
+## Completed (Transcript Recovery)
+- [x] Deploy `recover-transcript` edge function
+- [x] Invoke and recover lost transcript from ElevenLabs API
+- [x] Generate ProjectCard via `synthesize-project` — "YouTube Content Analyzer" (id: 44f80edd-a22b-41e5-8509-966e3e7516cc)
+- [x] Insert recovered project into `prd_projects` DB
+- [x] Clean up: removed `recover-transcript` function directory, config entry, and deleted from Supabase remote
+
 ## Bugs Fixed
 - [x] **Realtime sync not working** — Fixed by setting `REPLICA IDENTITY FULL` on `prd_projects` table. Migration `20260303100000_fix_realtime_replication.sql` pushed. Verified working via test script (INSERT events delivered in <1s).
 

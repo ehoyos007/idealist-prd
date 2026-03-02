@@ -14,10 +14,12 @@ import { cn } from '@/lib/utils';
 interface SessionViewProps {
   onComplete: (project: ProjectCard) => void;
   onCancel: () => void;
+  onDraftSaved?: (projectId: string) => void;
+  saveDraftProject?: (id: string, transcript: string) => Promise<void>;
   remixProject?: ProjectCard;
 }
 
-export function SessionView({ onComplete, onCancel, remixProject }: SessionViewProps) {
+export function SessionView({ onComplete, onCancel, onDraftSaved, saveDraftProject, remixProject }: SessionViewProps) {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -159,6 +161,13 @@ export function SessionView({ onComplete, onCancel, remixProject }: SessionViewP
       return;
     }
 
+    const projectId = crypto.randomUUID();
+
+    // Save draft with transcript before synthesis so it's never lost
+    if (saveDraftProject) {
+      await saveDraftProject(projectId, transcript);
+    }
+
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('synthesize-project', {
         body: { transcript }
@@ -171,8 +180,6 @@ export function SessionView({ onComplete, onCancel, remixProject }: SessionViewP
       if (!data?.projectCard) {
         throw new Error('No project card generated');
       }
-
-      const projectId = crypto.randomUUID();
 
       const projectCard: ProjectCard = {
         ...data.projectCard,
@@ -206,10 +213,14 @@ export function SessionView({ onComplete, onCancel, remixProject }: SessionViewP
       console.error('Error generating project card:', err);
       toast({
         title: "Generation failed",
-        description: err instanceof Error ? err.message : "Failed to generate project card",
+        description: "Your transcript has been saved. You can retry from your library.",
         variant: "destructive"
       });
-      onCancel();
+      if (onDraftSaved) {
+        onDraftSaved(projectId);
+      } else {
+        onCancel();
+      }
     } finally {
       setIsGenerating(false);
     }
