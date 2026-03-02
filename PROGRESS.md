@@ -1,5 +1,33 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 8 — Markdown Stripping, Remotion Studio & Mobile Testing)
+
+**Summary:** Fixed raw markdown rendering in video scenes, verified Remotion Studio standalone, tested mobile responsiveness on production. Deployed and pushed.
+
+### What was done
+- **Strip markdown from video scenes**: Created `src/remotion/lib/text.ts` with `stripMarkdown()` helper (removes `**bold**`, `*italic*`, `## headings`, list prefixes, `` `code` ``). Applied to all 4 parsers (`parseFeatures`, `parseMetrics`, `parseTechItems`, `parseSprintItems`) and 2 raw-text renders (`VisionScene` vision/problemStatement, `TechStackScene` architecture). Build: 2184 modules, 0 errors.
+- **Remotion Studio standalone**: `npm run remotion:studio` starts and builds in 2.3s. Scrubbed through all 9 scenes frame-by-frame via browser automation — all render correctly with sample data at 01:21.00 / 30fps. Warnings: zod 3.x vs required 4.x, duplicate lockfiles (non-blocking).
+- **Mobile responsiveness** (390x844 iPhone 14 Pro viewport on https://idealist-prd.vercel.app):
+  - Home page: hero wraps, CTA centered, 3-step cards stack vertically
+  - Library: search bar, grid/list toggle, project card with tags all fit
+  - Project detail: 2x2 scores grid, Document/Video Preview tabs tappable
+  - Video Preview: Remotion Player scales to container width, controls visible (play, volume, 0:00/1:21, fullscreen, scrub bar)
+- **Deployed** to Vercel production, committed and pushed to GitHub
+
+### Known issues (non-blocking)
+- Remotion zod version mismatch (installed 3.25.76, wants 4.3.6) — no runtime impact
+- Duplicate lockfiles (package-lock.json + bun.lockb)
+
+### Where we left off
+Remaining tasks in TASKS.md To Do section:
+- Test remix flow with ElevenLabs engine
+- Test realtime sync on prd_projects table
+- Test file upload (PDF/image) with parse-file-context
+- Test Voyage fallback (keyword-only mode)
+- Full E2E: voice session → PRD card → zip export
+
+---
+
 ## Session: 2026-03-02 (Session 7 — Vercel Deploy & E2E Testing)
 
 **Summary:** Deployed to Vercel and verified Remotion video preview end-to-end in production with real project data. All 9 scenes render, theme toggle works, no regressions.
