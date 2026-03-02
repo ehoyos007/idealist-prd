@@ -2,9 +2,9 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paperclip, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { UploadedFile } from '@/types/idea';
+import { UploadedFile } from '@/types/project';
+import { invokeFunction } from '@/lib/supabaseHelpers';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { supabase as defaultSupabase } from '@/integrations/supabase/client';
 
 interface FileUploadButtonProps {
   onFileProcessed: (file: UploadedFile, content: string) => void;
@@ -62,8 +62,8 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
 }
 
 export async function processFile(
-  file: File, 
-  supabase: SupabaseClient
+  file: File,
+  _supabase?: SupabaseClient
 ): Promise<{ file: UploadedFile; content: string } | null> {
   const validation = validateFile(file);
   if (!validation.valid) {
@@ -72,26 +72,25 @@ export async function processFile(
 
   let extractedContent: string;
 
-  const isTextFile = file.type.startsWith('text/') || 
+  const isTextFile = file.type.startsWith('text/') ||
     file.name.match(/\.(txt|md|json|csv)$/i);
 
   if (isTextFile) {
     extractedContent = await readFileAsText(file);
   } else {
     const fileContent = await readFileAsDataURL(file);
-    
-    const { data, error } = await supabase.functions.invoke('parse-file-context', {
-      body: {
-        fileContent,
-        fileName: file.name,
-        fileType: file.type
-      }
+
+    const { data, error } = await invokeFunction('parse-file-context', {
+      fileContent,
+      fileName: file.name,
+      fileType: file.type
     });
 
     if (error) throw new Error(error.message);
-    if (!data?.success) throw new Error(data?.error || 'Failed to process file');
+    const result = data as { success: boolean; error?: string; extractedText?: string } | null;
+    if (!result?.success) throw new Error(result?.error || 'Failed to process file');
 
-    extractedContent = data.extractedText;
+    extractedContent = result.extractedText || `File uploaded: ${file.name}`;
   }
 
   const uploadedFile: UploadedFile = {
@@ -136,7 +135,7 @@ export function FileUploadButton({ onFileProcessed, disabled }: FileUploadButton
     setIsProcessing(true);
 
     try {
-      const result = await processFile(file, defaultSupabase);
+      const result = await processFile(file);
       if (result) {
         onFileProcessed(result.file, result.content);
         toast({

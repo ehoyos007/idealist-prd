@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ConversationMessage } from '@/types/idea';
+import { ConversationMessage } from '@/types/project';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { FileIcon, Database, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileIcon, Database, ChevronDown, ChevronUp, Keyboard } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ConversationViewProps {
@@ -117,6 +117,12 @@ export function ConversationView({ messages }: ConversationViewProps) {
                 <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
                   {message.role === 'user' ? 'You' : 'Idealist'}
                 </span>
+                {message.source === 'text' && (
+                  <Badge variant="outline" className="text-xs font-mono py-0 px-1.5 gap-1">
+                    <Keyboard className="h-3 w-3" />
+                    typed
+                  </Badge>
+                )}
                 <span className="font-mono text-xs text-muted-foreground">
                   {message.timestamp.toLocaleTimeString()}
                 </span>

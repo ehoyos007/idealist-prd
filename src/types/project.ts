@@ -69,6 +69,7 @@ export interface ConversationMessage {
   role: 'user' | 'assistant' | 'context';
   content: string;
   timestamp: Date;
+  source?: 'voice' | 'text';
   attachedFile?: UploadedFile;
   retrievedContext?: RetrievedContext;
 }

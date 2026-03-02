@@ -1,14 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
+import { buildRemixPrompt, VOICE_AGENT_PROMPT } from "../_shared/prompts.ts";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
@@ -35,73 +34,18 @@ serve(async (req) => {
 
     console.log('Requesting conversation token from ElevenLabs...', projectContext ? '(remix mode)' : '(new project)');
 
-    // Build override prompt if remixing an existing project
-    let overrideConfig: Record<string, unknown> | undefined;
+    // Always pass overrideConfig so prompts are version-controlled in code
+    const overridePrompt = projectContext
+      ? buildRemixPrompt(projectContext)
+      : VOICE_AGENT_PROMPT;
 
-    if (projectContext) {
-      const overridePrompt = `The user wants to REMIX an existing project they've developed. Your goal is to help them iterate, pivot, or expand on this concept.
-
-## EXISTING PROJECT CONTEXT:
-**Project Name:** ${projectContext.projectName || 'Not specified'}
-**Tagline:** ${projectContext.tagline || 'Not specified'}
-**Tags:** ${projectContext.tags?.join(', ') || 'None'}
-
-**Vision:**
-${projectContext.vision || 'Not specified'}
-
-**Problem Statement:**
-${projectContext.problemStatement || 'Not specified'}
-
-**Target User:**
-${projectContext.targetUser || 'Not specified'}
-
-**User Stories:**
-${projectContext.userStories?.map((s: { persona: string; goal: string; benefit: string }) => `- As a ${s.persona}, I want to ${s.goal}, so that ${s.benefit}`).join('\n') || 'Not specified'}
-
-**Core Features:**
-${projectContext.coreFeatures || 'Not specified'}
-
-**Tech Stack:**
-${projectContext.techStack || 'Not specified'}
-
-**Architecture:**
-${projectContext.architecture || 'Not specified'}
-
-**Success Metrics:**
-${projectContext.successMetrics || 'Not specified'}
-
-**Risks & Open Questions:**
-${projectContext.risksAndOpenQuestions || 'Not specified'}
-
-**First Sprint Plan:**
-${projectContext.firstSprintPlan || 'Not specified'}
-
-**Scores:**
-- Complexity: ${projectContext.scores?.complexity || 'N/A'}/10
-- Impact: ${projectContext.scores?.impact || 'N/A'}/10
-- Urgency: ${projectContext.scores?.urgency || 'N/A'}/10
-- Confidence: ${projectContext.scores?.confidence || 'N/A'}/10
-
-## YOUR ROLE:
-Start by acknowledging you've reviewed their existing project "${projectContext.projectName}" and ask what aspects they'd like to change or explore. They might want to:
-- Pivot to a different market or audience
-- Add new features or capabilities
-- Change the technical architecture
-- Explore variations or spin-offs
-- Address weaknesses or risks in the current concept
-
-Ask targeted questions based on what they want to change. When you have enough information about their new direction, summarize the updated concept and let them know they can end the session to generate a new project card.
-
-Keep responses concise - this is a voice conversation. Avoid long monologues.`;
-
-      overrideConfig = {
-        agent: {
-          prompt: {
-            prompt: overridePrompt,
-          },
+    const overrideConfig = {
+      agent: {
+        prompt: {
+          prompt: overridePrompt,
         },
-      };
-    }
+      },
+    };
 
     // Request a signed conversation token from ElevenLabs
     const tokenUrl = `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${ELEVENLABS_AGENT_ID}`;
@@ -122,19 +66,14 @@ Keep responses concise - this is a voice conversation. Avoid long monologues.`;
     const data = await response.json();
     console.log('ElevenLabs conversation token received successfully');
 
-    return new Response(JSON.stringify({
+    return jsonResponse({
       token: data.signed_url || data.token,
       agentId: ELEVENLABS_AGENT_ID,
-      ...(overrideConfig ? { overrideConfig } : {}),
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      overrideConfig,
     });
   } catch (error) {
     console.error("Error generating token:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return errorResponse(errorMessage);
   }
 });

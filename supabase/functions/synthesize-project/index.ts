@@ -1,9 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
+import { SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_SPARSE_WARNING } from "../_shared/prompts.ts";
+import { logOpenRouterUsage } from "../_shared/usage.ts";
 
 const tools = [
   {
@@ -62,9 +61,10 @@ const tools = [
 ];
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const { transcript } = await req.json();
@@ -80,18 +80,18 @@ serve(async (req) => {
 
     console.log('Synthesizing project from transcript using Gemini 2.5 Pro via OpenRouter...');
 
-    const systemPrompt = `You are an expert at analyzing product brainstorming conversations and synthesizing them into structured, actionable project requirement documents (PRDs).
+    // A7: Transcript length validation
+    const wordCount = transcript.split(/\s+/).length;
+    const messageCount = (transcript.match(/^(User|AI):/gm) || []).length;
+    const isSparse = wordCount < 100 || messageCount < 4;
 
-Guidelines:
-- All scores should be 1-10, be honest based on the information provided
-- If information is missing for a section, make reasonable inferences or note what's unclear
-- Keep the tone professional but actionable
-- Make the problem statement particularly compelling and well-defined
-- User stories should follow the "As a [persona], I want to [goal], so that [benefit]" format
-- Tags should be quick indicators like "MVP Ready", "AI-Powered", "Developer Tool", "Mobile First", "B2B SaaS", "High Impact", "Low Complexity"
-- The first sprint plan should be very specific and actionable
+    const systemPrompt = isSparse
+      ? SYNTHESIS_SYSTEM_PROMPT + SYNTHESIS_SPARSE_WARNING
+      : SYNTHESIS_SYSTEM_PROMPT;
 
-Use the create_project_card function to structure your analysis.`;
+    if (isSparse) {
+      console.log(`Sparse transcript detected: ${wordCount} words, ${messageCount} messages`);
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -106,7 +106,8 @@ Use the create_project_card function to structure your analysis.`;
           { role: "user", content: `Here is the conversation transcript:\n\n${transcript}\n\nPlease analyze this conversation and create a structured project requirement document.` }
         ],
         tools,
-        tool_choice: { type: "function", function: { name: "create_project_card" } }
+        tool_choice: { type: "function", function: { name: "create_project_card" } },
+        temperature: 0.4,
       }),
     });
 
@@ -114,15 +115,15 @@ Use the create_project_card function to structure your analysis.`;
       const errorText = await response.text();
       console.error("OpenRouter API error:", response.status, errorText);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return errorResponse("Rate limits exceeded, please try again later.", 429);
       }
       throw new Error(`OpenRouter API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
     console.log('AI response received');
+
+    logOpenRouterUsage(aiResponse, 'synthesize-project', 'google/gemini-2.5-pro-preview-06-05');
 
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
 
@@ -141,15 +142,10 @@ Use the create_project_card function to structure your analysis.`;
 
     console.log('Project card synthesized successfully:', projectCard.projectName);
 
-    return new Response(JSON.stringify({ projectCard }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ projectCard });
   } catch (error) {
     console.error("Error synthesizing project:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return errorResponse(errorMessage);
   }
 });

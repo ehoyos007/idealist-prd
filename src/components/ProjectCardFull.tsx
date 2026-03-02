@@ -13,7 +13,7 @@ import { generatePdf } from '@/lib/generatePdf';
 import { generateProjectZip } from '@/lib/generateProjectZip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeFunction } from '@/lib/supabaseHelpers';
 import {
   Sheet,
   SheetContent,
@@ -59,15 +59,16 @@ export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix }: 
     if (!project.transcript) return;
     setIsRetrying(true);
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('synthesize-project', {
-        body: { transcript: project.transcript }
+      const { data, error: invokeError } = await invokeFunction('synthesize-project', {
+        transcript: project.transcript,
       });
 
       if (invokeError) throw new Error(invokeError.message);
-      if (!data?.projectCard) throw new Error('No project card generated');
+      const result = data as { projectCard?: ProjectCard } | null;
+      if (!result?.projectCard) throw new Error('No project card generated');
 
       const updatedProject: ProjectCard = {
-        ...data.projectCard,
+        ...result.projectCard,
         id: project.id,
         transcript: project.transcript,
         remixedFromId: project.remixedFromId,

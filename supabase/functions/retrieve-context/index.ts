@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
+import { QUERY_KEYWORD_PROMPT, QUERY_EXPANSION_PROMPT } from "../_shared/prompts.ts";
+import { logOpenRouterUsage } from "../_shared/usage.ts";
 
 async function extractQueryKeywords(query: string, apiKey: string): Promise<string[]> {
   try {
@@ -17,16 +16,8 @@ async function extractQueryKeywords(query: string, apiKey: string): Promise<stri
       body: JSON.stringify({
         model: "google/gemini-2.0-flash-lite-001",
         messages: [
-          {
-            role: "system",
-            content: `Extract the key search terms from the user's query. Focus on nouns, concepts, and specific terms that would help find relevant document chunks. Return ONLY a JSON array of lowercase keywords.
-Example input: "What does the document say about revenue projections?"
-Example output: ["revenue", "projections", "financial", "forecast"]`
-          },
-          {
-            role: "user",
-            content: query
-          }
+          { role: "system", content: QUERY_KEYWORD_PROMPT },
+          { role: "user", content: query }
         ],
       }),
     });
@@ -37,6 +28,7 @@ Example output: ["revenue", "projections", "financial", "forecast"]`
     }
 
     const data = await response.json();
+    logOpenRouterUsage(data, 'retrieve-context/keywords', 'google/gemini-2.0-flash-lite-001');
     const content = data.choices?.[0]?.message?.content || "[]";
 
     let cleanContent = content.trim();
@@ -49,6 +41,46 @@ Example output: ["revenue", "projections", "financial", "forecast"]`
   } catch (error) {
     console.error("Error extracting query keywords:", error);
     return query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  }
+}
+
+// A10: Query expansion — generate alternative phrasings
+async function expandQuery(query: string, apiKey: string): Promise<string[]> {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.0-flash-lite-001",
+        messages: [
+          { role: "system", content: QUERY_EXPANSION_PROMPT },
+          { role: "user", content: query }
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Query expansion failed:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    logOpenRouterUsage(data, 'retrieve-context/expansion', 'google/gemini-2.0-flash-lite-001');
+    const content = data.choices?.[0]?.message?.content || "[]";
+
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```json')) cleanContent = cleanContent.slice(7);
+    if (cleanContent.startsWith('```')) cleanContent = cleanContent.slice(3);
+    if (cleanContent.endsWith('```')) cleanContent = cleanContent.slice(0, -3);
+
+    const expanded = JSON.parse(cleanContent.trim());
+    return Array.isArray(expanded) ? expanded : [];
+  } catch (error) {
+    console.error("Error expanding query:", error);
+    return [];
   }
 }
 
@@ -184,9 +216,10 @@ function keywordFallbackSearch(
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const { query, sessionId, limit = 3 } = await req.json();
@@ -213,37 +246,52 @@ serve(async (req) => {
     console.log(`Query keywords: ${queryKeywords.join(', ')}`);
 
     if (queryKeywords.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, chunks: [], queryKeywords, retrievalMethod: "none" }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ success: true, chunks: [], queryKeywords, retrievalMethod: "none" });
     }
 
     let retrievalMethod = "keyword";
     let candidates: ChunkCandidate[] = [];
 
-    // Stage 1+2: Embed query → vector search (if Voyage available)
+    // A10: Query expansion — embed original + expanded queries for broader recall
     if (VOYAGE_API_KEY) {
-      const queryEmbedding = await embedQuery(query, VOYAGE_API_KEY);
+      const expandedQueries = await expandQuery(query, OPENROUTER_API_KEY);
+      const allQueries = [query, ...expandedQueries];
+      console.log(`Query expansion: ${allQueries.length} variants (original + ${expandedQueries.length} expanded)`);
 
-      if (queryEmbedding) {
+      // Embed all query variants
+      const allCandidates = new Map<string, ChunkCandidate>();
+
+      for (const q of allQueries) {
+        const queryEmbedding = await embedQuery(q, VOYAGE_API_KEY);
+        if (!queryEmbedding) continue;
+
         const { data: vectorResults, error: vectorError } = await supabase
           .rpc('match_document_chunks', {
             query_embedding: queryEmbedding,
             match_session_id: sessionId,
-            match_threshold: 0.3,
+            match_threshold: 0.4,
             match_count: 10,
           });
 
         if (vectorError) {
           console.error('Vector search error:', vectorError);
+          continue;
         }
 
-        if (vectorResults && vectorResults.length > 0) {
-          candidates = vectorResults;
-          retrievalMethod = "vector";
-          console.log(`Vector search returned ${candidates.length} candidates`);
+        if (vectorResults) {
+          for (const result of vectorResults) {
+            const existing = allCandidates.get(result.id);
+            if (!existing || (result.similarity && (!existing.similarity || result.similarity > existing.similarity))) {
+              allCandidates.set(result.id, result);
+            }
+          }
         }
+      }
+
+      if (allCandidates.size > 0) {
+        candidates = Array.from(allCandidates.values());
+        retrievalMethod = "vector";
+        console.log(`Vector search (with expansion) returned ${candidates.length} unique candidates`);
       }
     }
 
@@ -257,9 +305,9 @@ serve(async (req) => {
       console.log(`Keyword fallback returned ${candidates.length} results`);
     }
 
-    // Stage 4: Rerank via Voyage (if we have vector candidates and API key)
+    // Stage 4: Rerank via Voyage (if we have candidates and API key)
     let finalChunks: ChunkCandidate[];
-    if (retrievalMethod === "vector" && VOYAGE_API_KEY && candidates.length > limit) {
+    if (VOYAGE_API_KEY && candidates.length > limit) {
       finalChunks = await rerank(query, candidates, limit, VOYAGE_API_KEY);
       console.log(`Reranked to ${finalChunks.length} chunks`);
     } else {
@@ -275,22 +323,16 @@ serve(async (req) => {
 
     console.log(`Returning ${responseChunks.length} chunks (method: ${retrievalMethod})`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        chunks: responseChunks,
-        queryKeywords,
-        retrievalMethod,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({
+      success: true,
+      chunks: responseChunks,
+      queryKeywords,
+      retrievalMethod,
+    });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error retrieving context:', errorMessage);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage, chunks: [] }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(errorMessage);
   }
 });

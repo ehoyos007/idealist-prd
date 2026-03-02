@@ -26,7 +26,38 @@
 - [x] Build passes clean (0 TS errors, 2160 modules)
 
 ## In Progress
+- [ ] Deploy AI improvements + new features (edge functions, migrations, env vars, Vercel)
+
+## To Do
+- [ ] Deploy edge functions: `supabase functions deploy`
+- [ ] Push new migrations: `supabase db push` (prd_usage_logs, match_threshold update, prd_sessions)
+- [ ] Set `IDEALIST_API_SECRET` in Supabase secrets
+- [ ] Set `VITE_IDEALIST_API_SECRET` in Vercel env vars
+- [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
+- [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)
+- [ ] Test auto-save (start session, wait 60s, verify prd_sessions row created)
+- [ ] Test sparse transcript handling (short conversation → verify "[Needs Discussion]" in generated PRD)
+- [ ] Test scoring rubric alignment (3 different transcripts → verify scores match rubric anchors)
+- [ ] Test API key auth (curl without key → 401, with key → 200)
+- [ ] Check prd_usage_logs table for entries after running sessions
 - [ ] End-to-end test: voice session -> PRD card -> zip export (voice works; card generation works via API; need user mic input for full UI flow)
+
+## Completed (AI Improvements + Features — Session 12)
+- [x] A9: Centralize prompts into `_shared/prompts.ts` (10 prompts), CORS into `_shared/cors.ts`, all 6 edge functions updated
+- [x] A1: API key auth — `_shared/auth.ts` + `src/lib/supabaseHelpers.ts` wrapper, all frontend calls migrated
+- [x] A2: Enhanced voice agent prompt with 8-section tracking, wrap-up signal, vague-answer handling
+- [x] A2: `elevenlabs-token` always passes `overrideConfig` (prompts version-controlled in code)
+- [x] A3: Calibrated scoring rubric with concrete anchors (complexity, impact, urgency, confidence)
+- [x] A4: Set `temperature: 0.4` on synthesis API call
+- [x] A7: Transcript length validation (server-side sparse warning + client-side descriptive toast)
+- [x] A5: Usage/cost logging table + `_shared/usage.ts` + logging in 4 edge functions
+- [x] A6: Chunk size 500→300, overlap 50→75, metadata enrichment `[Source: fileName | Section i/n]`, threshold 0.3→0.4
+- [x] A8: Enriched image parsing (7 categories) + PDF parsing (6 categories) prompts
+- [x] A10: Query expansion — `expandQuery()` generates 2-3 alternative phrasings, embed all, deduplicate, rerank
+- [x] B1: Text chat input — `ChatInput` component, `sendTextMessage()`, "typed" badge, tagged transcript
+- [x] B2: Pause/resume — `prd_sessions` table, `useSessionPersistence` hook, auto-save, DraftCard in library, resume routing
+- [x] Fixed stale `@/types/idea` imports in `ConversationView.tsx` and `FileUploadButton.tsx`
+- [x] Build passes clean (0 TS errors, 2187 modules, 4.20s)
 
 ## Completed (Testing)
 - [x] Deploy to Vercel (https://idealist-prd.vercel.app)

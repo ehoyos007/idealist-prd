@@ -1,14 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
+import { IMAGE_PARSING_PROMPT, PDF_PARSING_PROMPT, GENERIC_FILE_PARSING_PROMPT } from "../_shared/prompts.ts";
+import { logOpenRouterUsage } from "../_shared/usage.ts";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const { fileContent, fileName, fileType } = await req.json();
@@ -28,10 +28,7 @@ serve(async (req) => {
         textContent = atob(base64Data);
       }
 
-      return new Response(
-        JSON.stringify({ success: true, extractedText: textContent, fileName }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ success: true, extractedText: textContent, fileName });
     }
 
     const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
@@ -56,61 +53,46 @@ serve(async (req) => {
       mimeType = fileType || 'application/octet-stream';
     }
 
-    // Build messages with multimodal content for images
+    // Build messages with multimodal content
     let messages: Record<string, unknown>[];
 
     if (fileType?.startsWith('image/')) {
       messages = [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that describes images in detail for context in a product brainstorming session. Focus on any text, diagrams, charts, or relevant visual information.'
-        },
+        { role: 'system', content: IMAGE_PARSING_PROMPT },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: `Please describe this image in detail, extracting any text, data, or relevant information that could be useful for developing a product idea. File: ${fileName}`
+              text: `Analyze this image thoroughly, extracting all relevant information for product development. File: ${fileName}`
             },
             {
               type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64Data}`
-              }
+              image_url: { url: `data:${mimeType};base64,${base64Data}` }
             }
           ]
         }
       ];
     } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-      // PDFs: send as base64 in a text message with instruction to extract
-      // OpenRouter/Gemini supports PDF via multimodal
       messages = [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that extracts and summarizes document content for context in a product brainstorming session. Be thorough and detailed.'
-        },
+        { role: 'system', content: PDF_PARSING_PROMPT },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: `Please extract and summarize all text content from this PDF document. Focus on key information, data points, and insights. File: ${fileName}`
+              text: `Extract and organize all content from this PDF document. File: ${fileName}`
             },
             {
               type: 'image_url',
-              image_url: {
-                url: `data:application/pdf;base64,${base64Data}`
-              }
+              image_url: { url: `data:application/pdf;base64,${base64Data}` }
             }
           ]
         }
       ];
     } else {
       messages = [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that processes documents for context in a product brainstorming session.'
-        },
+        { role: 'system', content: GENERIC_FILE_PARSING_PROMPT },
         {
           role: 'user',
           content: `The user has uploaded a file named "${fileName}" of type "${fileType}". Please acknowledge this file and provide any useful context you can infer from the filename and type.`
@@ -138,21 +120,16 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    logOpenRouterUsage(data, 'parse-file-context', 'google/gemini-2.5-pro-preview-06-05');
     const extractedText = data.choices?.[0]?.message?.content || `File uploaded: ${fileName}`;
 
     console.log(`Successfully processed ${fileName}`);
 
-    return new Response(
-      JSON.stringify({ success: true, extractedText, fileName }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ success: true, extractedText, fileName });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error processing file:', errorMessage);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(errorMessage);
   }
 });

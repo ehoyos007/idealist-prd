@@ -1,5 +1,81 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 12 — AI Improvements + Text Chat + Pause/Resume)
+
+**Summary:** Implemented 10 AI improvements (security, quality, robustness, polish) and 2 new features (text chat input, pause/resume sessions) across 5 phases. 19 files created/modified, 3 new migrations.
+
+### What was done
+
+**Phase 1 — Foundation (A9 + A1)**
+- Created `supabase/functions/_shared/cors.ts` — shared CORS headers + `jsonResponse`/`errorResponse`/`corsResponse` helpers
+- Created `supabase/functions/_shared/auth.ts` — `validateApiKey()` checking `x-api-key` header against `IDEALIST_API_SECRET` env var (fails open in dev)
+- Created `supabase/functions/_shared/prompts.ts` — all 10 centralized prompts (voice agent, remix, synthesis with rubric, keyword extraction, query keywords, image parsing, PDF parsing, generic file parsing, query expansion, sparse transcript warning)
+- Created `src/lib/supabaseHelpers.ts` — `invokeFunction()` wrapper attaching API key header from `VITE_IDEALIST_API_SECRET`
+- Updated all 6 edge functions to use shared imports (`cors.ts`, `auth.ts`, `prompts.ts`) + auth check at top of handler
+- Replaced all frontend `supabase.functions.invoke()` calls with `invokeFunction()` wrapper (in `useElevenLabsConversation.ts`, `SessionView.tsx`, `FileUploadButton.tsx`, `ProjectCardFull.tsx`)
+- Added `VITE_IDEALIST_API_SECRET` to `.env`
+- Fixed stale `@/types/idea` imports → `@/types/project` in `ConversationView.tsx` and `FileUploadButton.tsx`
+
+**Phase 2 — AI Quality (A2 + A3 + A4 + A7)**
+- A2: Enhanced voice agent prompt with 8-section tracking, wrap-up signal after 6+ sections, vague-answer handling, expertise calibration
+- A2: `elevenlabs-token` now ALWAYS passes `overrideConfig` with prompt (not just remix mode) — prompts are version-controlled in code
+- A3: Added calibrated scoring rubric to synthesis prompt with concrete anchors (Complexity: 1-2 static site → 9-10 novel research; Impact: 1-2 narrow → 9-10 industry-transforming; Urgency: 1-2 evergreen → 9-10 window closing; Confidence: 1-2 assumptions → 9-10 proven traction)
+- A4: Set `temperature: 0.4` on OpenRouter synthesis API call
+- A7: Server-side transcript validation (word count + message count) — appends sparse warning instructing "[Needs Discussion]" for sparse sections instead of hallucinating
+- A7: Improved client-side check in `SessionView` — warns about short conversations while still allowing generation
+
+**Phase 3 — Robustness & RAG (A5 + A6 + A8 + A10)**
+- A5: Created `20260304000000_add_usage_logs.sql` migration with `prd_usage_logs` table (function_name, model, provider, tokens, estimated_cost, session_id, metadata)
+- A5: Created `supabase/functions/_shared/usage.ts` — fire-and-forget `logUsage()`, `logOpenRouterUsage()`, `logVoyageUsage()` helpers
+- A5: Added logging calls to `synthesize-project`, `parse-file-context`, `chunk-and-index`, `retrieve-context`
+- A6: Reduced chunk size 500→300 words, increased overlap 50→75 words
+- A6: Added chunk metadata enrichment: `[Source: {fileName} | Section {i}/{total}]` prepended to each chunk
+- A6: Raised similarity threshold 0.3→0.4 (in edge function + migration `20260304100000_update_match_threshold.sql`)
+- A8: Enriched image parsing prompt (7 categories: text, diagrams, UI, charts, wireframes, architecture, other)
+- A8: Enriched PDF parsing prompt (6 categories: structure, content, tables, figures, metadata, actionable items)
+- A10: Added `expandQuery()` to `retrieve-context` — uses Gemini Flash Lite to generate 2-3 alternative phrasings, embeds all variants, deduplicates by chunk ID (keeps highest similarity), reranks merged set
+
+**Phase 4 — Text Chat Input (B1)**
+- Added `source?: 'voice' | 'text'` field to `ConversationMessage` type
+- Created `src/components/ChatInput.tsx` — input field + send button, Enter to send, monospace font, "Type a message, URL, or code snippet..." placeholder
+- Added `sendTextMessage()` to `useElevenLabsConversation` — injects via `sendContextualUpdate()` with acknowledgment framing, triggers RAG for substantial text
+- Updated `ConversationView.tsx` — "typed" badge with keyboard icon on text-sourced messages
+- Updated `getTranscript()` — tags typed messages as `User (typed): ...`
+- `ChatInput` visible only when `status === 'connected'`
+
+**Phase 5 — Pause/Resume Sessions (B2)**
+- Created `20260305000000_add_prd_sessions.sql` migration — `prd_sessions` table (id, status, messages JSONB, transcript, metadata JSONB, timestamps, project_id FK, RLS, realtime, auto-updating trigger)
+- Created `src/hooks/useSessionPersistence.ts` — `saveSession()`, `loadSession()`, `fetchPausedSessions()`, `deleteSession()`, `startAutoSave()` (every 60s), `stopAutoSave()`
+- Added `resumeConversation()` to `useElevenLabsConversation` — restores messages, reconnects to ElevenLabs, injects prior transcript via `sendContextualUpdate` with resume framing
+- Updated `SessionView.tsx` — Pause button (next to End & Generate), auto-save lifecycle, resume-on-mount with `resumeSessionId` prop, loading indicator for resume
+- Updated `LibraryView.tsx` — "Draft Sessions" section above projects grid with `DraftCard` component (draft badge, message/word count, relative time, resume + delete buttons, remix source name)
+- Updated `Index.tsx` — `resumeSessionId` state, `handleResumeDraft()`, `handleSessionPause()`, `handleDeleteDraft()`, fetches paused sessions on library navigation
+
+### Build verification
+- `tsc --noEmit` — 0 errors
+- `vite build` — clean (2187 modules, 4.20s)
+
+### New files created (9)
+- `supabase/functions/_shared/cors.ts`
+- `supabase/functions/_shared/auth.ts`
+- `supabase/functions/_shared/prompts.ts`
+- `supabase/functions/_shared/usage.ts`
+- `src/lib/supabaseHelpers.ts`
+- `src/components/ChatInput.tsx`
+- `src/hooks/useSessionPersistence.ts`
+- `supabase/migrations/20260304000000_add_usage_logs.sql`
+- `supabase/migrations/20260304100000_update_match_threshold.sql`
+- `supabase/migrations/20260305000000_add_prd_sessions.sql`
+
+### What remains
+- Deploy edge functions: `supabase functions deploy`
+- Push new migrations: `supabase db push`
+- Set `IDEALIST_API_SECRET` in Supabase secrets and `VITE_IDEALIST_API_SECRET` in Vercel env vars
+- Deploy frontend to Vercel (auto on push)
+- Manual testing: voice session with text chat, pause/resume flow, scoring rubric alignment, sparse transcript handling
+
+---
+
 ## Session: 2026-03-02 (Session 11 — Transcript Recovery & Draft Safety Net)
 
 **Summary:** Built transcript recovery edge function and implemented draft-save safety net to prevent future transcript loss when synthesis fails.

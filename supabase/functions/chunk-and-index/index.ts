@@ -1,28 +1,30 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
+import { KEYWORD_EXTRACTION_PROMPT } from "../_shared/prompts.ts";
+import { logOpenRouterUsage, logVoyageUsage } from "../_shared/usage.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const CHUNK_SIZE = 500;
-const CHUNK_OVERLAP = 50;
+const CHUNK_SIZE = 300;
+const CHUNK_OVERLAP = 75;
 const VOYAGE_BATCH_SIZE = 128;
 
-function splitIntoChunks(text: string): string[] {
+function splitIntoChunks(text: string, fileName: string): string[] {
   const words = text.split(/\s+/);
   const chunks: string[] = [];
 
   if (words.length <= CHUNK_SIZE) {
-    return [text];
+    return [`[Source: ${fileName} | Section 1/1]\n${text}`];
   }
 
   let start = 0;
+  const totalChunks = Math.ceil((words.length - CHUNK_OVERLAP) / (CHUNK_SIZE - CHUNK_OVERLAP));
+  let chunkNum = 0;
   while (start < words.length) {
+    chunkNum++;
     const end = Math.min(start + CHUNK_SIZE, words.length);
-    const chunk = words.slice(start, end).join(' ');
-    chunks.push(chunk);
+    const chunkText = words.slice(start, end).join(' ');
+    chunks.push(`[Source: ${fileName} | Section ${chunkNum}/${totalChunks}]\n${chunkText}`);
     start = end - CHUNK_OVERLAP;
     if (start >= words.length - CHUNK_OVERLAP) break;
   }
@@ -41,24 +43,8 @@ async function extractKeywords(text: string, apiKey: string): Promise<string[]> 
       body: JSON.stringify({
         model: "google/gemini-2.0-flash-lite-001",
         messages: [
-          {
-            role: "system",
-            content: `Extract 5-10 important keywords from the given text. Focus on:
-- Business terms and concepts
-- Industry names and sectors
-- Technologies and tools mentioned
-- Problem statements and pain points
-- Solution concepts and approaches
-- Metrics and numbers
-- Proper nouns (company names, product names)
-
-Return ONLY a JSON array of lowercase keywords, no explanations.
-Example: ["saas", "automation", "small business", "workflow", "productivity"]`
-          },
-          {
-            role: "user",
-            content: text.substring(0, 2000)
-          }
+          { role: "system", content: KEYWORD_EXTRACTION_PROMPT },
+          { role: "user", content: text.substring(0, 2000) }
         ],
         response_format: { type: "json_object" }
       }),
@@ -70,6 +56,7 @@ Example: ["saas", "automation", "small business", "workflow", "productivity"]`
     }
 
     const data = await response.json();
+    logOpenRouterUsage(data, 'chunk-and-index/keywords', 'google/gemini-2.0-flash-lite-001');
     const content = data.choices?.[0]?.message?.content || "[]";
 
     let cleanContent = content.trim();
@@ -78,7 +65,6 @@ Example: ["saas", "automation", "small business", "workflow", "productivity"]`
     if (cleanContent.endsWith('```')) cleanContent = cleanContent.slice(0, -3);
 
     const parsed = JSON.parse(cleanContent.trim());
-    // Handle both array and { keywords: [...] } shapes
     const keywords = Array.isArray(parsed) ? parsed : (parsed.keywords || []);
     return keywords.map((k: string) => k.toLowerCase());
   } catch (error) {
@@ -127,9 +113,10 @@ async function generateEmbeddings(
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const { text, fileName, fileType, fileSize, sessionId } = await req.json();
@@ -151,8 +138,8 @@ serve(async (req) => {
 
     console.log(`Chunking document: ${fileName} for session: ${sessionId}`);
 
-    const chunks = splitIntoChunks(text);
-    console.log(`Created ${chunks.length} chunks`);
+    const chunks = splitIntoChunks(text, fileName);
+    console.log(`Created ${chunks.length} chunks (${CHUNK_SIZE} words, ${CHUNK_OVERLAP} overlap)`);
 
     // Extract keywords for each chunk
     const chunkRecords = [];
@@ -199,22 +186,16 @@ serve(async (req) => {
 
     console.log(`Successfully indexed ${chunks.length} chunks for ${fileName}`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        chunkCount: chunks.length,
-        sessionId,
-        fileName
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({
+      success: true,
+      chunkCount: chunks.length,
+      sessionId,
+      fileName
+    });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error chunking document:', errorMessage);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(errorMessage);
   }
 });

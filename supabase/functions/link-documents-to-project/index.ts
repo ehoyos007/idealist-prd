@@ -1,15 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { validateApiKey } from "../_shared/auth.ts";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return corsResponse();
+
+  const authError = validateApiKey(req);
+  if (authError) return authError;
 
   try {
     const { sessionId, projectId } = await req.json();
@@ -41,10 +39,7 @@ serve(async (req) => {
 
     if (!chunks || chunks.length === 0) {
       console.log('No document chunks found for session');
-      return new Response(
-        JSON.stringify({ success: true, linkedDocuments: 0, totalChunks: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ success: true, linkedDocuments: 0, totalChunks: 0 });
     }
 
     // Update all chunks to link to the project
@@ -82,26 +77,19 @@ serve(async (req) => {
 
     if (insertError) {
       console.error('Failed to insert project_documents:', insertError);
-      // Don't throw - chunks are already linked
     }
 
     console.log(`Linked ${documentRecords.length} documents with ${chunks.length} total chunks to project ${projectId}`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        linkedDocuments: documentRecords.length,
-        totalChunks: chunks.length
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({
+      success: true,
+      linkedDocuments: documentRecords.length,
+      totalChunks: chunks.length
+    });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error linking documents:', errorMessage);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(errorMessage);
   }
 });
