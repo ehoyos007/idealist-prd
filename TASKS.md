@@ -33,11 +33,11 @@
 - [x] Test Remotion video preview in app — all 9 scenes play with real project data (81s / 1:21 duration)
 - [x] Test theme toggle reactivity in video player — dark & light modes both render correctly
 - [x] Verify Document tab has no regressions after tabs addition
+- [x] Strip markdown `**bold**` markers in video scene text parsers — created `stripMarkdown()` helper in `src/remotion/lib/text.ts`, applied to all 4 parsers + VisionScene + TechStackScene architecture
+- [x] Test Remotion Studio standalone — all 9 scenes render with sample data (01:21.00 duration, 30fps)
+- [x] Test mobile responsiveness — home, library, project detail, video player all render correctly on 390x844 (iPhone 14 Pro) viewport. Player scales to container width, tabs are usable.
 
 ## To Do
-- [ ] Strip markdown `**bold**` markers in video scene text parsers (TechStack, Metrics, Features)
-- [ ] Test Remotion Studio standalone (`npm run remotion:studio`)
-- [ ] Test mobile responsiveness of video player
 - [ ] Test remix flow with ElevenLabs engine
 - [ ] Test realtime sync on prd_projects table
 - [ ] Test file upload (PDF/image) with OpenRouter/Gemini backend (parse-file-context)

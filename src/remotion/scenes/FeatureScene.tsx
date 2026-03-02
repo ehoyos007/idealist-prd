@@ -3,11 +3,12 @@ import { getTheme } from '../lib/theme';
 import { fontSans, fontMono } from '../lib/fonts';
 import { useFadeIn, useSlideUp, staggerDelay } from '../lib/animations';
 import type { FeatureSceneProps } from '../types';
+import { stripMarkdown } from '../lib/text';
 
 function parseFeatures(text: string): string[] {
-  return text
+  return stripMarkdown(text)
     .split(/\n/)
-    .map((line) => line.replace(/^[-•*]\s*/, '').trim())
+    .map((line) => line.trim())
     .filter(Boolean);
 }
 

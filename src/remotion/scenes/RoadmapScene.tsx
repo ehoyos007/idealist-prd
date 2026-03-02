@@ -3,11 +3,12 @@ import { getTheme } from '../lib/theme';
 import { fontSans, fontMono } from '../lib/fonts';
 import { useFadeIn, useSlideUp, staggerDelay, useScaleSpring } from '../lib/animations';
 import type { RoadmapSceneProps } from '../types';
+import { stripMarkdown } from '../lib/text';
 
 function parseSprintItems(text: string): string[] {
-  return text
+  return stripMarkdown(text)
     .split(/\n/)
-    .map((line) => line.replace(/^[-•*\d.)\s]+/, '').trim())
+    .map((line) => line.trim())
     .filter(Boolean);
 }
 

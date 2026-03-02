@@ -3,11 +3,12 @@ import { getTheme } from '../lib/theme';
 import { fontSans, fontMono } from '../lib/fonts';
 import { useFadeIn, useScaleSpring, staggerDelay } from '../lib/animations';
 import type { TechStackSceneProps } from '../types';
+import { stripMarkdown } from '../lib/text';
 
 function parseTechItems(text: string): string[] {
-  return text
+  return stripMarkdown(text)
     .split(/[,\n]/)
-    .map((item) => item.replace(/^[-•*]\s*/, '').trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
@@ -105,7 +106,7 @@ export const TechStackScene: React.FC<TechStackSceneProps> = ({
             whiteSpace: 'pre-wrap',
           }}
         >
-          {architecture}
+          {stripMarkdown(architecture)}
         </div>
       </div>
     </AbsoluteFill>

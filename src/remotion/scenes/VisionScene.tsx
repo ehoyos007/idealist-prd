@@ -3,6 +3,7 @@ import { getTheme } from '../lib/theme';
 import { fontSans, fontMono } from '../lib/fonts';
 import { useFadeIn, useTypewriter } from '../lib/animations';
 import type { VisionSceneProps } from '../types';
+import { stripMarkdown } from '../lib/text';
 
 export const VisionScene: React.FC<VisionSceneProps> = ({
   vision,
@@ -12,10 +13,13 @@ export const VisionScene: React.FC<VisionSceneProps> = ({
   const frame = useCurrentFrame();
   const colors = getTheme(theme);
 
+  const cleanVision = stripMarkdown(vision);
+  const cleanProblem = stripMarkdown(problemStatement);
+
   const visionLabelOpacity = useFadeIn(5);
-  const visionText = useTypewriter(vision, 15, 0.8);
+  const visionText = useTypewriter(cleanVision, 15, 0.8);
   const problemLabelOpacity = useFadeIn(20);
-  const problemText = useTypewriter(problemStatement, 30, 0.8);
+  const problemText = useTypewriter(cleanProblem, 30, 0.8);
 
   const dividerHeight = interpolate(frame, [10, 60], [0, 100], {
     extrapolateLeft: 'clamp',
