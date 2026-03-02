@@ -26,21 +26,27 @@
 - [x] Build passes clean (0 TS errors, 2160 modules)
 
 ## In Progress
-- [ ] Deploy AI improvements + new features (edge functions, migrations, env vars, Vercel)
+(none)
 
 ## To Do
-- [ ] Deploy edge functions: `supabase functions deploy`
-- [ ] Push new migrations: `supabase db push` (prd_usage_logs, match_threshold update, prd_sessions)
-- [ ] Set `IDEALIST_API_SECRET` in Supabase secrets
-- [ ] Set `VITE_IDEALIST_API_SECRET` in Vercel env vars
 - [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
 - [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)
 - [ ] Test auto-save (start session, wait 60s, verify prd_sessions row created)
 - [ ] Test sparse transcript handling (short conversation → verify "[Needs Discussion]" in generated PRD)
 - [ ] Test scoring rubric alignment (3 different transcripts → verify scores match rubric anchors)
-- [ ] Test API key auth (curl without key → 401, with key → 200)
 - [ ] Check prd_usage_logs table for entries after running sessions
-- [ ] End-to-end test: voice session -> PRD card -> zip export (voice works; card generation works via API; need user mic input for full UI flow)
+- [ ] End-to-end test: voice session → PRD card → zip export (requires mic input)
+
+## Completed (Deployment — Session 13)
+- [x] Push 3 new migrations: prd_usage_logs, update_match_threshold, prd_sessions
+- [x] Fix `_shared/prompts.ts` escaped backticks (22 occurrences)
+- [x] Deploy all 6 edge functions with `_shared/` imports
+- [x] Set `IDEALIST_API_SECRET` in Supabase secrets
+- [x] Commit and push 27 files to GitHub main
+- [x] Set `VITE_IDEALIST_API_SECRET` in Vercel (prod + preview)
+- [x] Redeploy to Vercel with new env vars
+- [x] Smoke test: home, library, project detail — all pass, no console errors
+- [x] Verify API key auth enforcement (401 without key)
 
 ## Completed (AI Improvements + Features — Session 12)
 - [x] A9: Centralize prompts into `_shared/prompts.ts` (10 prompts), CORS into `_shared/cors.ts`, all 6 edge functions updated

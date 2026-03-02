@@ -1,5 +1,33 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 13 — Full Deployment)
+
+**Summary:** Deployed all Session 12 work (AI improvements, text chat, pause/resume) to production — migrations, edge functions, secrets, GitHub push, Vercel redeploy, smoke test passed.
+
+### What was done
+
+1. **Pushed 3 migrations** via `supabase db push`: `prd_usage_logs`, `update_match_threshold`, `prd_sessions`
+2. **Fixed `_shared/prompts.ts`** — 22 escaped backticks (`\``) and 22 escaped dollar signs in template literals were corrupting the file. Fixed with byte-level replacement before deploying.
+3. **Deployed all 6 edge functions** with `_shared/` imports (cors, auth, prompts, usage modules)
+4. **Set `IDEALIST_API_SECRET`** in Supabase secrets (`eefb7d180f6f607e1a532bfad023080cee465dc724597104050f17658365331a`)
+5. **Committed and pushed** 27 files (+1494/-430 lines) to GitHub main branch
+6. **Set `VITE_IDEALIST_API_SECRET`** in Vercel for production + preview environments
+7. **Triggered production redeploy** to pick up new env var (build: 2187 modules, 8.22s)
+8. **Added `.vercel/` to `.gitignore`**
+9. **Smoke tested** at https://idealist-prd.vercel.app:
+   - Home page loads with "3 projects in your library"
+   - Library shows all 3 project cards with tags and scores
+   - Project detail view renders full PRD (scores grid, Document/Video tabs, all sections)
+   - No console errors
+10. **Verified auth enforcement**: requests without `x-api-key` return 401
+
+### What remains
+- Manual voice tests (text chat, pause/resume, sparse transcript) — require mic input
+- Check `prd_usage_logs` table after running voice sessions
+- Full E2E: voice → PRD card → zip export
+
+---
+
 ## Session: 2026-03-02 (Session 12 — AI Improvements + Text Chat + Pause/Resume)
 
 **Summary:** Implemented 10 AI improvements (security, quality, robustness, polish) and 2 new features (text chat input, pause/resume sessions) across 5 phases. 19 files created/modified, 3 new migrations.
