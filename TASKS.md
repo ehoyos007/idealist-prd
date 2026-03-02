@@ -26,7 +26,7 @@
 - [x] Build passes clean (0 TS errors, 2160 modules)
 
 ## In Progress
-- [ ] End-to-end test: voice session -> PRD card -> zip export (voice works; card generation works via API; need to test full UI flow)
+- [ ] End-to-end test: voice session -> PRD card -> zip export (voice works; card generation works via API; need user mic input for full UI flow)
 
 ## Completed (Testing)
 - [x] Deploy to Vercel (https://idealist-prd.vercel.app)
@@ -36,9 +36,17 @@
 - [x] Strip markdown `**bold**` markers in video scene text parsers — created `stripMarkdown()` helper in `src/remotion/lib/text.ts`, applied to all 4 parsers + VisionScene + TechStackScene architecture
 - [x] Test Remotion Studio standalone — all 9 scenes render with sample data (01:21.00 duration, 30fps)
 - [x] Test mobile responsiveness — home, library, project detail, video player all render correctly on 390x844 (iPhone 14 Pro) viewport. Player scales to container width, tabs are usable.
+- [x] Test synthesize-project API — full ProjectCard returned with all PRD fields, scores 1-10, 4 user stories, 5 tags (HTTP 200)
+- [x] Test parse-file-context PDF — success, Gemini extracted "Business Plan: AI-powered SaaS for team productivity" (HTTP 200)
+- [x] Test parse-file-context Image — success, Gemini described image content (HTTP 200)
+- [x] Test RAG round-trip — chunk-and-index stored 1 chunk with 12 keywords + 1024-dim embedding, retrieve-context returned match via vector search (retrievalMethod: "vector") (HTTP 200)
+- [x] Test Voyage fallback — with VOYAGE_API_KEY unset: embedding=null, 10 keywords populated, retrievalMethod="keyword" confirmed. Key restored.
+- [x] Test export buttons — Copy (toast: "Copied!"), Download .md (toast: "Downloaded!"), PDF (toast: "PDF Downloaded!"), Zip (toast: "Project Kit Downloaded!"). Zip generates CONTEXT.md, TASKS.md, PLAN.md, CLAUDE.md.
+- [x] Test remix UI flow (non-voice) — Sparkles button exists, SessionView loads with "Remixing: Satori..." badge, button says "Start Remixing", Cancel returns to home, elevenlabs-token returns signed URL + overrideConfig with projectContext.
 
-## To Do
-- [ ] Test remix flow with ElevenLabs engine
-- [ ] Test realtime sync on prd_projects table
-- [ ] Test file upload (PDF/image) with OpenRouter/Gemini backend (parse-file-context)
-- [ ] Test Voyage fallback (unset VOYAGE_API_KEY → confirm keyword-only mode still works)
+## Bugs Fixed
+- [x] **Realtime sync not working** — Fixed by setting `REPLICA IDENTITY FULL` on `prd_projects` table. Migration `20260303100000_fix_realtime_replication.sql` pushed. Verified working via test script (INSERT events delivered in <1s).
+
+## Manual Tests Needed (require mic input)
+- [ ] Full E2E: voice session → PRD card → zip export (speak 2-3 min → End & Generate Card → verify all PRD fields → export zip)
+- [ ] Remix voice session: open existing project → Remix → speak about changes → generate new card → verify new project with `remixedFromId`

@@ -1,5 +1,49 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 10 — Realtime Bug Fix)
+
+**Summary:** Fixed Supabase realtime subscriptions not delivering events. Root cause: missing `REPLICA IDENTITY FULL` on `prd_projects` table.
+
+### What was done
+- **Diagnosed root cause**: Table was in `supabase_realtime` publication but lacked `REPLICA IDENTITY FULL`, preventing the realtime service from broadcasting change events.
+- **Migration created**: `20260303100000_fix_realtime_replication.sql` — sets `REPLICA IDENTITY FULL` and idempotently re-adds table to publication.
+- **Pushed to Supabase**: `supabase db push` applied successfully.
+- **Verified fix**: Node.js test script subscribed to realtime channel, inserted a row, and confirmed INSERT event received in <1s. Test row cleaned up.
+
+### Bug resolution
+- `REPLICA IDENTITY FULL` was the missing piece — without it, PostgreSQL's logical replication doesn't emit the WAL records that Supabase Realtime needs to broadcast `postgres_changes` events.
+
+---
+
+## Session: 2026-03-02 (Session 9 — E2E Integration Testing)
+
+**Summary:** Ran comprehensive integration test suite across all APIs and UI flows. 10/11 tests passed. Found one bug: Supabase realtime subscriptions not delivering events to browser.
+
+### What was done
+
+**Phase 1 — API Tests (4/4 PASS)**
+- **1A. synthesize-project**: POST with multi-turn transcript → full ProjectCard returned ("AI Inventory Manager", 5 tags, 4 user stories, scores 4/9/7/8). HTTP 200.
+- **1B. parse-file-context (PDF)**: POST base64-encoded PDF → `success: true`, Gemini extracted "Business Plan: AI-powered SaaS for team productivity". HTTP 200.
+- **1C. parse-file-context (Image)**: POST base64-encoded 1x1 PNG → `success: true`, Gemini described image content with creative interpretations. HTTP 200.
+- **1D. RAG round-trip**: chunk-and-index stored 1 chunk with 12 keywords + 1024-dim Voyage embedding → retrieve-context returned match via `retrievalMethod: "vector"` → cleanup successful. All HTTP 200/204.
+
+**Phase 2 — Browser Tests (2.5/3 — 1 bug found)**
+- **2A. Realtime sync**: FAIL. INSERT (201), PATCH (200), DELETE (204) all confirmed at API level. But neither tab received realtime events — required page refresh to see changes. Subscription code in `useProjectsStorage.ts` is correct; likely needs Supabase Dashboard > Database > Replication enablement for `prd_projects`.
+- **2B. Export buttons**: PASS. All 4 export buttons work: Copy ("Copied!" toast), Download .md ("Downloaded!" toast), PDF ("PDF Downloaded!" toast), Zip ("Project Kit Downloaded!" toast). Zip generates CONTEXT.md, TASKS.md, PLAN.md, CLAUDE.md as specified.
+- **2C. Remix UI flow**: PASS. Sparkles button present, SessionView loads with "Remixing: Satori to PRD Automation Pipeline" badge, button says "Start Remixing", Cancel returns to home. `elevenlabs-token` with `projectContext` returns signed wss:// URL + `overrideConfig` with remix prompt.
+
+**Phase 3 — Voyage Fallback (PASS)**
+- Unset `VOYAGE_API_KEY` → chunk-and-index: `embedding=null`, 10 keywords populated → retrieve-context: `retrievalMethod: "keyword"` confirmed → Key restored.
+
+### Bug found
+- **Supabase Realtime**: Events not delivered to browser. All CRUD operations work at REST API level, but `postgres_changes` subscription in `useProjectsStorage.ts` doesn't receive INSERT/UPDATE/DELETE events. Root cause likely: table not enabled in Supabase Dashboard Replication settings (publication SQL exists but Dashboard toggle may be needed).
+
+### What remains (manual, requires mic)
+- Full E2E: voice → PRD card → zip export
+- Remix voice session: existing project → Remix → speak → new card with `remixedFromId`
+
+---
+
 ## Session: 2026-03-02 (Session 8 — Markdown Stripping, Remotion Studio & Mobile Testing)
 
 **Summary:** Fixed raw markdown rendering in video scenes, verified Remotion Studio standalone, tested mobile responsiveness on production. Deployed and pushed.
