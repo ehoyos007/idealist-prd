@@ -1,5 +1,28 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 7 — Vercel Deploy & E2E Testing)
+
+**Summary:** Deployed to Vercel and verified Remotion video preview end-to-end in production with real project data. All 9 scenes render, theme toggle works, no regressions.
+
+### What was done
+- **Vercel deployment**: Created `idealist-prd` project on Vercel (enzo-hoyos-projects scope). Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` env vars for production + preview. Added `vercel.json` with Vite framework config and SPA rewrites. Deployed to https://idealist-prd.vercel.app
+- **E2E browser testing** (via Chrome automation on production URL):
+  - Home page loads, shows "1 project in your library"
+  - Library view shows "Satori to PRD Automation Pipeline" project card
+  - Project detail view opens with header, scores grid, Document/Video Preview tabs
+  - **Document tab**: All PRD sections render correctly — no regressions from tab addition
+  - **Video Preview tab**: Remotion Player loads with controls (play, volume, scrub, fullscreen)
+  - **Duration**: 81.0s (1:21) at 30fps — dynamic calculation working with real data
+  - **Scenes verified**: UserStories (3 animated cards with real personas/goals/benefits), VisionScene (two-column typewriter with divider), TechStackScene (pills + architecture), MetricsScene (5 colored animated bars with real KPIs), ScoreRadar (SVG diamond chart)
+  - **Dark mode**: Black background, white text, colored chart accents
+  - **Light mode**: White background, black text, light chart palette — confirmed theme toggle re-renders video
+  - **Tab switching**: Document ↔ Video Preview tabs switch cleanly
+
+### Known issues (cosmetic, non-blocking)
+- Raw markdown `**bold**` markers visible in TechStack and Metrics scenes — text parsers don't strip markdown formatting. Polish item for future pass.
+
+---
+
 ## Session: 2026-03-02 (Session 6 — Remotion Video Preview)
 
 **Summary:** Implemented Remotion video preview — 17 new files, 1 modified. Animated motion-graphic explainer of ProjectCards embedded as a "Video Preview" tab in ProjectCardFull.
@@ -14,19 +37,6 @@
 - **VideoPreviewWrapper**: Embeds `@remotion/player` with controls, passes theme and project data
 - **ProjectCardFull modified**: Added `<Tabs>` (Document / Video Preview) below scores grid. Video tab lazy-loads via `React.lazy()`. Theme passed from `useTheme()`. Scores grid stays above both tabs.
 - **Build verified**: `tsc --noEmit` 0 errors, `vite build` clean. VideoPreviewWrapper code-split into 196KB chunk (only loads on tab click)
-
-### Architecture decisions
-- Inline styles (no Tailwind) in Remotion scenes — isolated rendering context
-- Custom SVG for all charts — Recharts flickers in Remotion
-- `React.lazy()` for Player — prevents bundle bloat on initial load
-- Single `<Series>` composition — simpler than `@remotion/transitions` for Phase 1
-- `npm run remotion:studio` script added for standalone scene development
-
-### Not yet tested
-- Remotion Studio standalone preview (`npm run remotion:studio`)
-- Live player in app with real project data
-- Theme toggle reactivity in video player
-- Mobile responsiveness of player
 
 ---
 

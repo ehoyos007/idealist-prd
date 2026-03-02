@@ -28,10 +28,16 @@
 ## In Progress
 - [ ] End-to-end test: voice session -> PRD card -> zip export (voice works; card generation works via API; need to test full UI flow)
 
+## Completed (Testing)
+- [x] Deploy to Vercel (https://idealist-prd.vercel.app)
+- [x] Test Remotion video preview in app — all 9 scenes play with real project data (81s / 1:21 duration)
+- [x] Test theme toggle reactivity in video player — dark & light modes both render correctly
+- [x] Verify Document tab has no regressions after tabs addition
+
 ## To Do
-- [ ] Test Remotion video preview in app (open saved project → Video Preview tab → verify all 9 scenes play)
+- [ ] Strip markdown `**bold**` markers in video scene text parsers (TechStack, Metrics, Features)
 - [ ] Test Remotion Studio standalone (`npm run remotion:studio`)
-- [ ] Test theme toggle reactivity in video player (light ↔ dark)
+- [ ] Test mobile responsiveness of video player
 - [ ] Test remix flow with ElevenLabs engine
 - [ ] Test realtime sync on prd_projects table
 - [ ] Test file upload (PDF/image) with OpenRouter/Gemini backend (parse-file-context)
