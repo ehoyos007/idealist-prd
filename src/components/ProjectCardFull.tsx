@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { ProjectCard } from '@/types/project';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Pencil, Save, X, Copy, Download, FileText, Trash2, MoreVertical, Sparkles, Files, FolderArchive } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Pencil, Save, X, Copy, Download, FileText, Film, Trash2, MoreVertical, Sparkles, Files, FolderArchive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from 'next-themes';
 import { generatePdf } from '@/lib/generatePdf';
 import { generateProjectZip } from '@/lib/generateProjectZip';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -18,6 +20,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+
+const VideoPreview = lazy(() => import('@/remotion/VideoPreviewWrapper'));
 
 interface ProjectCardFullProps {
   project: ProjectCard;
@@ -32,6 +36,7 @@ export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix }: 
   const [editedProject, setEditedProject] = useState<ProjectCard>(project);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const { toast } = useToast();
+  const { theme: appTheme } = useTheme();
   const isMobile = useIsMobile();
   const { documents, isLoading: documentsLoading } = useProjectDocuments(project.id);
 
@@ -320,105 +325,135 @@ ${p.firstSprintPlan}
         <ScoreBox label="Confidence" value={editedProject.scores.confidence} field="confidence" />
       </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <Section title="Vision" content={editedProject.vision} field="vision" />
-        <Section title="Problem Statement" content={editedProject.problemStatement} field="problemStatement" />
-        <Section title="Target User" content={editedProject.targetUser} field="targetUser" />
+      {/* Tabbed Content */}
+      <Tabs defaultValue="document" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mb-4 w-fit">
+          <TabsTrigger value="document" className="font-mono text-xs uppercase tracking-wider">
+            <FileText className="h-3.5 w-3.5 mr-1.5" />
+            Document
+          </TabsTrigger>
+          <TabsTrigger value="video" className="font-mono text-xs uppercase tracking-wider">
+            <Film className="h-3.5 w-3.5 mr-1.5" />
+            Video Preview
+          </TabsTrigger>
+        </TabsList>
 
-        {/* User Stories */}
-        <div className="mb-6">
-          <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">User Stories</h3>
-          <div className="grid grid-cols-1 gap-4">
-            {editedProject.userStories.map((story, index) => (
-              <div key={index} className="border-2 border-primary p-4">
-                {isEditing ? (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Persona</div>
-                      <Input
-                        value={story.persona}
-                        onChange={(e) => updateUserStory(index, 'persona', e.target.value)}
-                        className="h-auto py-1"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Goal</div>
-                      <Input
-                        value={story.goal}
-                        onChange={(e) => updateUserStory(index, 'goal', e.target.value)}
-                        className="h-auto py-1"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Benefit</div>
-                      <Input
-                        value={story.benefit}
-                        onChange={(e) => updateUserStory(index, 'benefit', e.target.value)}
-                        className="h-auto py-1"
-                      />
-                    </div>
+        <TabsContent value="document" className="flex-1 min-h-0 mt-0">
+          <ScrollArea className="h-full">
+            <Section title="Vision" content={editedProject.vision} field="vision" />
+            <Section title="Problem Statement" content={editedProject.problemStatement} field="problemStatement" />
+            <Section title="Target User" content={editedProject.targetUser} field="targetUser" />
+
+            {/* User Stories */}
+            <div className="mb-6">
+              <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">User Stories</h3>
+              <div className="grid grid-cols-1 gap-4">
+                {editedProject.userStories.map((story, index) => (
+                  <div key={index} className="border-2 border-primary p-4">
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Persona</div>
+                          <Input
+                            value={story.persona}
+                            onChange={(e) => updateUserStory(index, 'persona', e.target.value)}
+                            className="h-auto py-1"
+                          />
+                        </div>
+                        <div>
+                          <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Goal</div>
+                          <Input
+                            value={story.goal}
+                            onChange={(e) => updateUserStory(index, 'goal', e.target.value)}
+                            className="h-auto py-1"
+                          />
+                        </div>
+                        <div>
+                          <div className="text-xs font-mono uppercase text-muted-foreground mb-1">Benefit</div>
+                          <Input
+                            value={story.benefit}
+                            onChange={(e) => updateUserStory(index, 'benefit', e.target.value)}
+                            className="h-auto py-1"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-xs font-mono uppercase text-muted-foreground">As a </span>
+                          <span className="font-medium">{story.persona}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-mono uppercase text-muted-foreground">I want to </span>
+                          <span className="font-medium">{story.goal}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-mono uppercase text-muted-foreground">So that </span>
+                          <span className="font-medium">{story.benefit}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs font-mono uppercase text-muted-foreground">As a </span>
-                      <span className="font-medium">{story.persona}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-mono uppercase text-muted-foreground">I want to </span>
-                      <span className="font-medium">{story.goal}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-mono uppercase text-muted-foreground">So that </span>
-                      <span className="font-medium">{story.benefit}</span>
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        <Section title="Core Features" content={editedProject.coreFeatures} field="coreFeatures" />
-        <Section title="Tech Stack" content={editedProject.techStack} field="techStack" />
-        <Section title="Architecture" content={editedProject.architecture} field="architecture" />
-        <Section title="Success Metrics" content={editedProject.successMetrics} field="successMetrics" />
-        <Section title="Risks & Open Questions" content={editedProject.risksAndOpenQuestions} field="risksAndOpenQuestions" />
-        <Section title="First Sprint Plan" content={editedProject.firstSprintPlan} field="firstSprintPlan" />
+            <Section title="Core Features" content={editedProject.coreFeatures} field="coreFeatures" />
+            <Section title="Tech Stack" content={editedProject.techStack} field="techStack" />
+            <Section title="Architecture" content={editedProject.architecture} field="architecture" />
+            <Section title="Success Metrics" content={editedProject.successMetrics} field="successMetrics" />
+            <Section title="Risks & Open Questions" content={editedProject.risksAndOpenQuestions} field="risksAndOpenQuestions" />
+            <Section title="First Sprint Plan" content={editedProject.firstSprintPlan} field="firstSprintPlan" />
 
-        {/* Attached Documents */}
-        {documents.length > 0 && (
-          <div className="mb-6">
-            <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">
-              <Files className="h-4 w-4 inline mr-2" />
-              Attached Documents ({documents.length})
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {documents.map((doc) => (
-                <div key={doc.id} className="border-2 border-primary p-3 flex items-center gap-3">
-                  <FileText className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {doc.chunkCount} indexed sections
-                    </p>
-                  </div>
+            {/* Attached Documents */}
+            {documents.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">
+                  <Files className="h-4 w-4 inline mr-2" />
+                  Attached Documents ({documents.length})
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {documents.map((doc) => (
+                    <div key={doc.id} className="border-2 border-primary p-3 flex items-center gap-3">
+                      <FileText className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{doc.fileName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.chunkCount} indexed sections
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {editedProject.transcript && (
-          <div className="mb-6">
-            <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">Conversation Transcript</h3>
-            <div className="border-2 border-primary p-4 bg-secondary max-h-48 overflow-y-auto overflow-x-hidden">
-              <pre className="text-sm font-mono whitespace-pre-wrap break-words text-muted-foreground">{editedProject.transcript}</pre>
-            </div>
-          </div>
-        )}
-      </ScrollArea>
+            {editedProject.transcript && (
+              <div className="mb-6">
+                <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">Conversation Transcript</h3>
+                <div className="border-2 border-primary p-4 bg-secondary max-h-48 overflow-y-auto overflow-x-hidden">
+                  <pre className="text-sm font-mono whitespace-pre-wrap break-words text-muted-foreground">{editedProject.transcript}</pre>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="video" className="flex-1 mt-0">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64 border-2 border-primary">
+                <p className="font-mono text-sm text-muted-foreground">Loading video preview...</p>
+              </div>
+            }
+          >
+            <VideoPreview
+              project={editedProject}
+              theme={(appTheme === 'dark' ? 'dark' : 'light') as 'light' | 'dark'}
+            />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

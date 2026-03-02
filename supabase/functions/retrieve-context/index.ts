@@ -8,14 +8,14 @@ const corsHeaders = {
 
 async function extractQueryKeywords(query: string, apiKey: string): Promise<string[]> {
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.0-flash-lite-001",
         messages: [
           {
             role: "system",
@@ -38,19 +38,149 @@ Example output: ["revenue", "projections", "financial", "forecast"]`
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "[]";
-    
+
     let cleanContent = content.trim();
     if (cleanContent.startsWith('```json')) cleanContent = cleanContent.slice(7);
     if (cleanContent.startsWith('```')) cleanContent = cleanContent.slice(3);
     if (cleanContent.endsWith('```')) cleanContent = cleanContent.slice(0, -3);
-    
+
     const keywords = JSON.parse(cleanContent.trim());
     return Array.isArray(keywords) ? keywords.map((k: string) => k.toLowerCase()) : [];
   } catch (error) {
     console.error("Error extracting query keywords:", error);
-    // Fallback: simple word extraction
     return query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
   }
+}
+
+async function embedQuery(
+  query: string,
+  voyageApiKey: string
+): Promise<number[] | null> {
+  try {
+    const response = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${voyageApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "voyage-3-large",
+        input: [query],
+        input_type: "query",
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Voyage query embedding failed: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.data?.[0]?.embedding ?? null;
+  } catch (error) {
+    console.error("Voyage query embedding error:", error);
+    return null;
+  }
+}
+
+interface ChunkCandidate {
+  id: string;
+  file_name: string;
+  chunk_index: number;
+  chunk_text: string;
+  keywords?: string[];
+  similarity?: number;
+}
+
+async function rerank(
+  query: string,
+  documents: ChunkCandidate[],
+  topK: number,
+  voyageApiKey: string
+): Promise<ChunkCandidate[]> {
+  if (documents.length === 0) return [];
+  try {
+    const response = await fetch("https://api.voyageai.com/v1/rerank", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${voyageApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "rerank-2",
+        query,
+        documents: documents.map(d => d.chunk_text),
+        top_k: topK,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Voyage rerank failed: ${response.status}`);
+      return documents.slice(0, topK);
+    }
+
+    const data = await response.json();
+    return data.data.map((r: { index: number }) => documents[r.index]);
+  } catch (error) {
+    console.error("Voyage rerank error:", error);
+    return documents.slice(0, topK);
+  }
+}
+
+function keywordFallbackSearch(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+  queryKeywords: string[],
+  limit: number
+) {
+  return {
+    async search(): Promise<{ chunks: ChunkCandidate[]; method: string }> {
+      // Keyword array overlap
+      const { data: keywordMatches, error: keywordError } = await supabase
+        .from('prd_document_chunks')
+        .select('id, file_name, chunk_index, chunk_text, keywords')
+        .eq('session_id', sessionId)
+        .overlaps('keywords', queryKeywords);
+
+      if (keywordError) {
+        console.error('Keyword search error:', keywordError);
+      }
+
+      // Full-text search on chunk_text
+      const searchTerms = queryKeywords.join(' | ');
+      const { data: textMatches, error: textError } = await supabase
+        .from('prd_document_chunks')
+        .select('id, file_name, chunk_index, chunk_text, keywords')
+        .eq('session_id', sessionId)
+        .textSearch('chunk_text', searchTerms, { type: 'websearch' });
+
+      if (textError) {
+        console.error('Text search error:', textError);
+      }
+
+      // Combine and deduplicate
+      const allMatches = [...(keywordMatches || []), ...(textMatches || [])];
+      const uniqueMatches = new Map<string, ChunkCandidate & { score: number }>();
+
+      for (const match of allMatches) {
+        if (!uniqueMatches.has(match.id)) {
+          const matchingKeywords = match.keywords?.filter((k: string) =>
+            queryKeywords.includes(k.toLowerCase())
+          ) || [];
+          uniqueMatches.set(match.id, { ...match, score: matchingKeywords.length });
+        } else {
+          const existing = uniqueMatches.get(match.id)!;
+          existing.score += 1;
+        }
+      }
+
+      const ranked = Array.from(uniqueMatches.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+
+      return { chunks: ranked, method: "keyword" };
+    }
+  };
 }
 
 serve(async (req) => {
@@ -65,11 +195,12 @@ serve(async (req) => {
       throw new Error('Missing required fields: query, sessionId');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const VOYAGE_API_KEY = Deno.env.get('VOYAGE_API_KEY');
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!OPENROUTER_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing required environment variables');
     }
 
@@ -77,79 +208,79 @@ serve(async (req) => {
 
     console.log(`Retrieving context for session: ${sessionId}, query: "${query.substring(0, 50)}..."`);
 
-    // Extract keywords from query
-    const queryKeywords = await extractQueryKeywords(query, LOVABLE_API_KEY);
+    // Extract keywords (used for fallback and observability)
+    const queryKeywords = await extractQueryKeywords(query, OPENROUTER_API_KEY);
     console.log(`Query keywords: ${queryKeywords.join(', ')}`);
 
     if (queryKeywords.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, chunks: [], message: 'No keywords extracted' }),
+        JSON.stringify({ success: true, chunks: [], queryKeywords, retrievalMethod: "none" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build search query - combine full-text search with keyword array overlap
-    // First, get chunks with matching keywords
-    const { data: keywordMatches, error: keywordError } = await supabase
-      .from('prd_document_chunks')
-      .select('id, file_name, chunk_index, chunk_text, keywords')
-      .eq('session_id', sessionId)
-      .overlaps('keywords', queryKeywords);
+    let retrievalMethod = "keyword";
+    let candidates: ChunkCandidate[] = [];
 
-    if (keywordError) {
-      console.error('Keyword search error:', keywordError);
-    }
+    // Stage 1+2: Embed query → vector search (if Voyage available)
+    if (VOYAGE_API_KEY) {
+      const queryEmbedding = await embedQuery(query, VOYAGE_API_KEY);
 
-    // Also do a full-text search on chunk_text
-    const searchTerms = queryKeywords.join(' | ');
-    const { data: textMatches, error: textError } = await supabase
-      .from('prd_document_chunks')
-      .select('id, file_name, chunk_index, chunk_text, keywords')
-      .eq('session_id', sessionId)
-      .textSearch('chunk_text', searchTerms, { type: 'websearch' });
+      if (queryEmbedding) {
+        const { data: vectorResults, error: vectorError } = await supabase
+          .rpc('match_document_chunks', {
+            query_embedding: queryEmbedding,
+            match_session_id: sessionId,
+            match_threshold: 0.3,
+            match_count: 10,
+          });
 
-    if (textError) {
-      console.error('Text search error:', textError);
-    }
+        if (vectorError) {
+          console.error('Vector search error:', vectorError);
+        }
 
-    // Combine and deduplicate results
-    const allMatches = [...(keywordMatches || []), ...(textMatches || [])];
-    const uniqueMatches = new Map();
-    
-    for (const match of allMatches) {
-      if (!uniqueMatches.has(match.id)) {
-        // Score based on keyword overlap
-        const matchingKeywords = match.keywords?.filter((k: string) => 
-          queryKeywords.includes(k.toLowerCase())
-        ) || [];
-        const score = matchingKeywords.length;
-        
-        uniqueMatches.set(match.id, { ...match, score });
-      } else {
-        // Boost score if found in both searches
-        const existing = uniqueMatches.get(match.id);
-        existing.score += 1;
+        if (vectorResults && vectorResults.length > 0) {
+          candidates = vectorResults;
+          retrievalMethod = "vector";
+          console.log(`Vector search returned ${candidates.length} candidates`);
+        }
       }
     }
 
-    // Sort by score and take top N
-    const rankedChunks = Array.from(uniqueMatches.values())
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit)
-      .map(({ id, file_name, chunk_index, chunk_text }) => ({
-        id,
-        fileName: file_name,
-        chunkIndex: chunk_index,
-        text: chunk_text
-      }));
+    // Stage 3: Keyword fallback if vector returned nothing
+    if (candidates.length === 0) {
+      console.log("Falling back to keyword search");
+      const fallback = keywordFallbackSearch(supabase, sessionId, queryKeywords, limit);
+      const result = await fallback.search();
+      candidates = result.chunks;
+      retrievalMethod = result.method;
+      console.log(`Keyword fallback returned ${candidates.length} results`);
+    }
 
-    console.log(`Found ${rankedChunks.length} relevant chunks`);
+    // Stage 4: Rerank via Voyage (if we have vector candidates and API key)
+    let finalChunks: ChunkCandidate[];
+    if (retrievalMethod === "vector" && VOYAGE_API_KEY && candidates.length > limit) {
+      finalChunks = await rerank(query, candidates, limit, VOYAGE_API_KEY);
+      console.log(`Reranked to ${finalChunks.length} chunks`);
+    } else {
+      finalChunks = candidates.slice(0, limit);
+    }
+
+    const responseChunks = finalChunks.map(({ id, file_name, chunk_index, chunk_text }) => ({
+      id,
+      fileName: file_name,
+      chunkIndex: chunk_index,
+      text: chunk_text,
+    }));
+
+    console.log(`Returning ${responseChunks.length} chunks (method: ${retrievalMethod})`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        chunks: rankedChunks,
-        queryKeywords
+      JSON.stringify({
+        success: true,
+        chunks: responseChunks,
+        queryKeywords,
+        retrievalMethod,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

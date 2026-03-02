@@ -7,38 +7,19 @@ const corsHeaders = {
 
 const tools = [
   {
-    type: "function",
+    type: "function" as const,
     function: {
       name: "create_project_card",
       description: "Create a structured project requirement document (PRD) from conversation analysis",
       parameters: {
         type: "object",
         properties: {
-          projectName: {
-            type: "string",
-            description: "Short project name (max 6 words)"
-          },
-          tagline: {
-            type: "string",
-            description: "One-line description of the project"
-          },
-          tags: {
-            type: "array",
-            items: { type: "string" },
-            description: "2-5 quick indicators like 'MVP Ready', 'AI-Powered', 'Developer Tool', 'Mobile First', 'B2B SaaS', 'High Impact', 'Low Complexity'"
-          },
-          vision: {
-            type: "string",
-            description: "1-2 paragraphs describing the long-term vision for the project"
-          },
-          problemStatement: {
-            type: "string",
-            description: "2-3 paragraphs clearly defining the problem being solved. Make it compelling and well-defined."
-          },
-          targetUser: {
-            type: "string",
-            description: "Detailed persona description of the primary target user"
-          },
+          projectName: { type: "string", description: "Short project name (max 6 words)" },
+          tagline: { type: "string", description: "One-line description of the project" },
+          tags: { type: "array", items: { type: "string" }, description: "2-5 quick indicators like 'MVP Ready', 'AI-Powered', 'Developer Tool', 'Mobile First', 'B2B SaaS', 'High Impact', 'Low Complexity'" },
+          vision: { type: "string", description: "1-2 paragraphs describing the long-term vision for the project" },
+          problemStatement: { type: "string", description: "2-3 paragraphs clearly defining the problem being solved. Make it compelling and well-defined." },
+          targetUser: { type: "string", description: "Detailed persona description of the primary target user" },
           userStories: {
             type: "array",
             items: {
@@ -48,35 +29,16 @@ const tools = [
                 goal: { type: "string", description: "What they want to accomplish" },
                 benefit: { type: "string", description: "Why they want to accomplish it" }
               },
-              required: ["persona", "goal", "benefit"],
-              additionalProperties: false
+              required: ["persona", "goal", "benefit"]
             },
             description: "User stories in 'As a [persona], I want to [goal], so that [benefit]' format"
           },
-          coreFeatures: {
-            type: "string",
-            description: "Detailed list of core features the project should include"
-          },
-          techStack: {
-            type: "string",
-            description: "Recommended technologies and frameworks for building the project"
-          },
-          architecture: {
-            type: "string",
-            description: "How the technical pieces fit together - system design overview"
-          },
-          successMetrics: {
-            type: "string",
-            description: "KPIs and success criteria for measuring project outcomes"
-          },
-          risksAndOpenQuestions: {
-            type: "string",
-            description: "Unknowns, risks, and open questions that need to be resolved"
-          },
-          firstSprintPlan: {
-            type: "string",
-            description: "Very specific and actionable plan for what to build in the first 1-2 weeks"
-          },
+          coreFeatures: { type: "string", description: "Detailed list of core features the project should include" },
+          techStack: { type: "string", description: "Recommended technologies and frameworks for building the project" },
+          architecture: { type: "string", description: "How the technical pieces fit together - system design overview" },
+          successMetrics: { type: "string", description: "KPIs and success criteria for measuring project outcomes" },
+          risksAndOpenQuestions: { type: "string", description: "Unknowns, risks, and open questions that need to be resolved" },
+          firstSprintPlan: { type: "string", description: "Very specific and actionable plan for what to build in the first 1-2 weeks" },
           scores: {
             type: "object",
             properties: {
@@ -85,8 +47,7 @@ const tools = [
               urgency: { type: "integer", description: "1-10 score for time sensitivity" },
               confidence: { type: "integer", description: "1-10 score for confidence in the approach" }
             },
-            required: ["complexity", "impact", "urgency", "confidence"],
-            additionalProperties: false
+            required: ["complexity", "impact", "urgency", "confidence"]
           }
         },
         required: [
@@ -94,8 +55,7 @@ const tools = [
           "targetUser", "userStories", "coreFeatures", "techStack",
           "architecture", "successMetrics", "risksAndOpenQuestions",
           "firstSprintPlan", "scores"
-        ],
-        additionalProperties: false
+        ]
       }
     }
   }
@@ -113,12 +73,12 @@ serve(async (req) => {
       throw new Error('No transcript provided');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+    if (!OPENROUTER_API_KEY) {
+      throw new Error('OPENROUTER_API_KEY is not configured');
     }
 
-    console.log('Synthesizing project from transcript using gemini-2.5-pro with tool calling...');
+    console.log('Synthesizing project from transcript using Gemini 2.5 Pro via OpenRouter...');
 
     const systemPrompt = `You are an expert at analyzing product brainstorming conversations and synthesizing them into structured, actionable project requirement documents (PRDs).
 
@@ -133,49 +93,41 @@ Guidelines:
 
 Use the create_project_card function to structure your analysis.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-pro-preview-06-05",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Here is the conversation transcript:\n\n${transcript}\n\nPlease analyze this conversation and create a structured project requirement document.` }
         ],
-        tools: tools,
+        tools,
         tool_choice: { type: "function", function: { name: "create_project_card" } }
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      throw new Error(`OpenRouter API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
-    console.log('AI response received:', JSON.stringify(aiResponse, null, 2));
+    console.log('AI response received');
 
-    // Extract project card from tool call response
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall || toolCall.function.name !== 'create_project_card') {
-      console.error('No valid tool call in response:', aiResponse);
+      console.error('No valid tool call in response:', JSON.stringify(aiResponse, null, 2));
       throw new Error('AI did not return a valid project card');
     }
 
@@ -184,11 +136,10 @@ Use the create_project_card function to structure your analysis.`;
       projectCard = JSON.parse(toolCall.function.arguments);
     } catch (parseError) {
       console.error('Failed to parse tool call arguments:', parseError);
-      console.error('Raw arguments:', toolCall.function.arguments);
       throw new Error('Failed to parse project card from AI response');
     }
 
-    console.log('Project card synthesized successfully via tool calling');
+    console.log('Project card synthesized successfully:', projectCard.projectName);
 
     return new Response(JSON.stringify({ projectCard }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -227,24 +227,26 @@ export function useElevenLabsConversation() {
         console.log('Got agent config, starting ElevenLabs session...');
 
         const isRemix = !!projectContext;
-        const systemPrompt = isRemix
-          ? buildRemixPrompt(projectContext)
-          : SYSTEM_PROMPT_NEW;
-        const firstMessage = isRemix
-          ? buildRemixFirstMessage(projectContext.projectName)
-          : FIRST_MESSAGE_NEW;
+
+        // Use signedUrl for authenticated sessions; fall back to agentId for public agents
+        const sessionConfig: Record<string, unknown> = data.token
+          ? { signedUrl: data.token }
+          : { agentId: data.agentId };
 
         await conversation.startSession({
-          agentId: data.agentId,
-          connectionType: 'webrtc',
-          overrides: {
-            agent: {
-              prompt: { prompt: systemPrompt },
-              firstMessage,
-            },
-            tts: { voiceId: '3sfGn775ryaDXhFWHwBg' },
-          },
+          ...sessionConfig,
         });
+
+        // For remix mode, inject project context after connection via contextual update
+        if (isRemix) {
+          const remixContext = buildRemixPrompt(projectContext);
+          try {
+            conversation.sendContextualUpdate(remixContext);
+            console.log('Remix context injected via sendContextualUpdate');
+          } catch (err) {
+            console.warn('Could not inject remix context:', err);
+          }
+        }
 
         // Status will be set to 'connected' by the onConnect callback
       } catch (err) {
