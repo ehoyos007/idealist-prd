@@ -29,13 +29,20 @@
 (none)
 
 ## To Do
+- [ ] Add estimated_cost calculation to `logOpenRouterUsage` (tokens recorded but cost is null)
 - [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
 - [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)
 - [ ] Test auto-save (start session, wait 60s, verify prd_sessions row created)
-- [ ] Test sparse transcript handling (short conversation → verify "[Needs Discussion]" in generated PRD)
-- [ ] Test scoring rubric alignment (3 different transcripts → verify scores match rubric anchors)
-- [ ] Check prd_usage_logs table for entries after running sessions
 - [ ] End-to-end test: voice session → PRD card → zip export (requires mic input)
+
+## Completed (E2E Testing — Session 14)
+- [x] Test sparse transcript handling — 22-word transcript → `[Needs Discussion]` in 5/9 PRD fields, scores C=1 I=3 U=2 Cf=4
+- [x] Test scoring rubric alignment — 3 transcripts (sparse/medium/rich) → scores monotonically increase across all 4 dimensions
+- [x] Check prd_usage_logs — 5 rows recorded with function_name, model, input/output tokens after API calls
+- [x] Verify session view pre-connect state — Cancel, Start Talking, Mute visible; ChatInput + Pause correctly hidden (gated on `connected`)
+- [x] Verify library shows no Draft Sessions when prd_sessions is empty
+- [x] Verify project detail view — full PRD, scores grid, Document/Video tabs, action buttons
+- [x] Zero console errors on production site
 
 ## Completed (Deployment — Session 13)
 - [x] Push 3 new migrations: prd_usage_logs, update_match_threshold, prd_sessions

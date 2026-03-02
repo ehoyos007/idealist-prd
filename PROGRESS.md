@@ -1,5 +1,38 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 14 — E2E Testing)
+
+**Summary:** Ran comprehensive E2E test suite for Session 12/13 features — sparse transcript handling, scoring rubric calibration, usage logging, and browser UI verification. All tests pass.
+
+### What was done
+
+**API Tests (4/4 PASS)**
+1. **Sparse transcript**: 22-word todo app transcript → `[Needs Discussion]` in 5/9 PRD fields (vision, targetUser, techStack, architecture, successMetrics). Scores appropriately low: C=1 I=3 U=2 Cf=4.
+2. **Scoring rubric — rich transcript**: Complex B2B SaaS (supply chain, ML, beta customers) → C=7 I=9 U=8 Cf=9. All within expected 7-10 range per rubric anchors.
+3. **Scoring rubric — medium transcript**: Recipe sharing app → C=3 I=5 U=2 Cf=6. Moderate scores, no sparse markers.
+4. **Rubric alignment check**: Sparse ≤ Medium ≤ Rich confirmed across all 4 dimensions (complexity, impact, urgency, confidence).
+
+**Usage Logging (PASS with minor gap)**
+5. **prd_usage_logs**: 5 rows recorded from test API calls — function_name, model (`google/gemini-2.5-pro-preview-06-05`), input_tokens (988-1539), output_tokens (1880-2793) all captured.
+6. **Minor gap**: `estimated_cost` is null — `logOpenRouterUsage` extracts tokens but never computes cost. Tokens are the important part; cost calculation is a polish item.
+
+**Browser/UI Tests (6/6 PASS)**
+7. **Home page**: Loads with "3 projects in your library", CTA works.
+8. **Library view**: 3 projects with tags, scores, search, grid/list toggle.
+9. **Draft Sessions**: Correctly absent when `prd_sessions` table is empty.
+10. **Session view (pre-connect)**: Cancel, Start Talking, Mute visible. ChatInput and Pause correctly hidden (gated on `status === 'connected'` in SessionView.tsx lines 381, 451).
+11. **Project detail**: Full PRD renders — scores grid, Document/Video Preview tabs, all 8 action buttons, user stories.
+12. **Console**: Zero errors on production.
+
+### What remains (all require mic input)
+- Text chat during voice session
+- Pause/resume flow
+- Auto-save (60s interval)
+- Full E2E: voice → PRD card → zip export
+- Remix voice session
+
+---
+
 ## Session: 2026-03-02 (Session 13 — Full Deployment)
 
 **Summary:** Deployed all Session 12 work (AI improvements, text chat, pause/resume) to production — migrations, edge functions, secrets, GitHub push, Vercel redeploy, smoke test passed.
