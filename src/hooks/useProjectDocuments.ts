@@ -16,7 +16,7 @@ export function useProjectDocuments(projectId: string | undefined) {
       setIsLoading(true);
       try {
         const { data, error } = await supabase
-          .from('project_documents')
+          .from('prd_project_documents')
           .select('id, file_name, file_type, chunk_count, created_at')
           .eq('project_id', projectId);
 

@@ -91,7 +91,7 @@ serve(async (req) => {
     // Build search query - combine full-text search with keyword array overlap
     // First, get chunks with matching keywords
     const { data: keywordMatches, error: keywordError } = await supabase
-      .from('document_chunks')
+      .from('prd_document_chunks')
       .select('id, file_name, chunk_index, chunk_text, keywords')
       .eq('session_id', sessionId)
       .overlaps('keywords', queryKeywords);
@@ -103,7 +103,7 @@ serve(async (req) => {
     // Also do a full-text search on chunk_text
     const searchTerms = queryKeywords.join(' | ');
     const { data: textMatches, error: textError } = await supabase
-      .from('document_chunks')
+      .from('prd_document_chunks')
       .select('id, file_name, chunk_index, chunk_text, keywords')
       .eq('session_id', sessionId)
       .textSearch('chunk_text', searchTerms, { type: 'websearch' });

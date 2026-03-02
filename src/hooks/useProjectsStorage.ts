@@ -12,7 +12,7 @@ export function useProjectsStorage() {
     const fetchProjects = async () => {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('projects')
+        .from('prd_projects')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -34,7 +34,7 @@ export function useProjectsStorage() {
         {
           event: '*',
           schema: 'public',
-          table: 'projects',
+          table: 'prd_projects',
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -65,7 +65,7 @@ export function useProjectsStorage() {
     const dbRow = projectCardToDbRow(project);
 
     const { error } = await supabase
-      .from('projects')
+      .from('prd_projects')
       .upsert(dbRow, { onConflict: 'id' });
 
     if (error) {
@@ -75,7 +75,7 @@ export function useProjectsStorage() {
   }, []);
 
   const deleteProject = useCallback(async (id: string) => {
-    const { error } = await supabase.from('projects').delete().eq('id', id);
+    const { error } = await supabase.from('prd_projects').delete().eq('id', id);
 
     if (error) {
       console.error('Failed to delete project:', error);

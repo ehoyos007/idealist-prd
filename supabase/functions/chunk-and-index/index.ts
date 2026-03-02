@@ -136,7 +136,7 @@ serve(async (req) => {
 
     // Insert all chunks
     const { error: insertError } = await supabase
-      .from('document_chunks')
+      .from('prd_document_chunks')
       .insert(chunkRecords);
 
     if (insertError) {

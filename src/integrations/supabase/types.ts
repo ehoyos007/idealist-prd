@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      document_chunks: {
+      prd_document_chunks: {
         Row: {
           chunk_index: number
           chunk_text: string
@@ -50,15 +50,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "document_chunks_project_id_fkey"
+            foreignKeyName: "prd_document_chunks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "prd_projects"
             referencedColumns: ["id"]
           },
         ]
       }
-      project_documents: {
+      prd_project_documents: {
         Row: {
           chunk_count: number | null
           created_at: string
@@ -88,15 +88,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "project_documents_project_id_fkey"
+            foreignKeyName: "prd_project_documents_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "prd_projects"
             referencedColumns: ["id"]
           },
         ]
       }
-      projects: {
+      prd_projects: {
         Row: {
           id: string
           project_name: string

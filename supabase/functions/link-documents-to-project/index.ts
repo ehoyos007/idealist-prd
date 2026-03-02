@@ -31,7 +31,7 @@ serve(async (req) => {
 
     // Get all chunks for this session to find unique files
     const { data: chunks, error: fetchError } = await supabase
-      .from('document_chunks')
+      .from('prd_document_chunks')
       .select('file_name, file_type')
       .eq('session_id', sessionId);
 
@@ -49,7 +49,7 @@ serve(async (req) => {
 
     // Update all chunks to link to the project
     const { error: updateError } = await supabase
-      .from('document_chunks')
+      .from('prd_document_chunks')
       .update({ project_id: projectId })
       .eq('session_id', sessionId);
 
@@ -77,7 +77,7 @@ serve(async (req) => {
     }));
 
     const { error: insertError } = await supabase
-      .from('project_documents')
+      .from('prd_project_documents')
       .insert(documentRecords);
 
     if (insertError) {
