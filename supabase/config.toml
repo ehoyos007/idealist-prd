@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.link-documents-to-project]
 verify_jwt = false
+
+[functions.check-allowlist]
+verify_jwt = false
+
+[functions.list-github-repos]
+verify_jwt = false
+
+[functions.fetch-supabase-schema]
+verify_jwt = false

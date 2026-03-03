@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Github, Loader2, Check, AlertCircle } from 'lucide-react';
@@ -9,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { invokeFunction } from '@/lib/supabaseHelpers';
 import { ConnectedRepo, RepoDepth, RepoFetchResult } from '@/types/project';
+import { RepoDropdown } from '@/components/RepoDropdown';
 
 interface RepoConnectButtonProps {
   onRepoConnected: (repo: ConnectedRepo) => void;
@@ -16,27 +16,17 @@ interface RepoConnectButtonProps {
   disabled?: boolean;
 }
 
-function parseRepoUrl(input: string): string | null {
-  const shorthand = input.match(/^([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)$/);
-  if (shorthand) return shorthand[1];
-
-  const url = input.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/);
-  if (url) return url[1];
-
-  return null;
-}
-
 export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: RepoConnectButtonProps) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [repoInput, setRepoInput] = useState('');
+  const [selectedRepo, setSelectedRepo] = useState<{ fullName: string; isPrivate: boolean } | null>(null);
   const [depth, setDepth] = useState<RepoDepth>('auto');
   const [userContext, setUserContext] = useState('');
   const [repo, setRepo] = useState<ConnectedRepo | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
   const resetState = () => {
-    setRepoInput('');
+    setSelectedRepo(null);
     setDepth('auto');
     setUserContext('');
     setRepo(null);
@@ -44,11 +34,10 @@ export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: Repo
   };
 
   const handleConnect = async () => {
-    const parsed = parseRepoUrl(repoInput.trim());
-    if (!parsed) {
+    if (!selectedRepo) {
       toast({
-        title: 'Invalid repository',
-        description: 'Enter a valid owner/repo or GitHub URL.',
+        title: 'No repository selected',
+        description: 'Please select a repository from the list or enter a URL.',
         variant: 'destructive',
       });
       return;
@@ -57,19 +46,18 @@ export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: Repo
     setIsConnecting(true);
 
     const connectedRepo: ConnectedRepo = {
-      repoName: parsed,
-      repoUrl: `https://github.com/${parsed}`,
+      repoName: selectedRepo.fullName,
+      repoUrl: `https://github.com/${selectedRepo.fullName}`,
       status: 'fetching',
       depth,
     };
     setRepo(connectedRepo);
 
     try {
-      // Update status to fetching
       setRepo((prev) => prev ? { ...prev, status: 'fetching' } : prev);
 
       const { data, error } = await invokeFunction<RepoFetchResult>('fetch-github-repo', {
-        repoUrl: parsed,
+        repoUrl: selectedRepo.fullName,
         sessionId,
         depth,
         userContext: userContext.trim() || undefined,
@@ -95,7 +83,6 @@ export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: Repo
       };
       setRepo(finalRepo);
 
-      // Brief delay to show success state before closing
       setTimeout(() => {
         onRepoConnected(finalRepo);
         setOpen(false);
@@ -169,15 +156,13 @@ export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: Repo
         {(!repo || repo.status === 'error') && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="repo-url" className="font-mono text-xs">
+              <Label className="font-mono text-xs">
                 Repository
               </Label>
-              <Input
-                id="repo-url"
-                placeholder="owner/repo or GitHub URL"
-                value={repoInput}
-                onChange={(e) => setRepoInput(e.target.value)}
-                className="font-mono"
+              <RepoDropdown
+                value={selectedRepo?.fullName || ''}
+                onSelect={(repo) => setSelectedRepo(repo)}
+                disabled={isConnecting}
               />
             </div>
 
@@ -214,7 +199,7 @@ export function RepoConnectButton({ onRepoConnected, sessionId, disabled }: Repo
             <Button
               onClick={handleConnect}
               className="w-full font-mono"
-              disabled={!repoInput.trim() || isConnecting}
+              disabled={!selectedRepo || isConnecting}
             >
               {isConnecting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

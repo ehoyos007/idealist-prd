@@ -3,7 +3,7 @@ import { ProjectCard } from '@/types/project';
 import { supabase } from '@/integrations/supabase/client';
 import { dbRowToProjectCard, projectCardToDbRow, ProjectDbRow } from '@/lib/projectTransformers';
 
-export function useProjectsStorage() {
+export function useProjectsStorage(userId?: string) {
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -11,10 +11,17 @@ export function useProjectsStorage() {
   useEffect(() => {
     const fetchProjects = async () => {
       setIsLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('prd_projects')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // If user is authenticated, show their projects + unclaimed ones
+      if (userId) {
+        query = query.or(`user_id.eq.${userId},user_id.is.null`);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Failed to fetch projects:', error);
@@ -59,7 +66,7 @@ export function useProjectsStorage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId]);
 
   const saveProject = useCallback(async (project: ProjectCard) => {
     const dbRow = projectCardToDbRow(project);
@@ -87,6 +94,7 @@ export function useProjectsStorage() {
           score_impact: 5,
           score_urgency: 5,
           score_confidence: 5,
+          ...(userId ? { user_id: userId } : {}),
         });
 
       if (error) {
@@ -95,7 +103,7 @@ export function useProjectsStorage() {
     } catch (err) {
       console.warn('Failed to save draft project:', err);
     }
-  }, []);
+  }, [userId]);
 
   const deleteProject = useCallback(async (id: string) => {
     const { error } = await supabase.from('prd_projects').delete().eq('id', id);

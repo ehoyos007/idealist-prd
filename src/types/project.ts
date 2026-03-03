@@ -90,6 +90,7 @@ export interface RepoFetchResult {
   chunksCreated: number;
   tree: string[];
   resolvedDepth: 'summary' | 'deep';
+  detectedSupabaseRef?: string;
   error?: string;
 }
 

@@ -222,7 +222,7 @@ serve(async (req) => {
   if (authError) return authError;
 
   try {
-    const { query, sessionId, limit = 3 } = await req.json();
+    const { query, sessionId, projectId, limit = 3 } = await req.json();
 
     if (!query || !sessionId) {
       throw new Error('Missing required fields: query, sessionId');
@@ -283,6 +283,36 @@ serve(async (req) => {
             const existing = allCandidates.get(result.id);
             if (!existing || (result.similarity && (!existing.similarity || result.similarity > existing.similarity))) {
               allCandidates.set(result.id, result);
+            }
+          }
+        }
+      }
+
+      // Also search project-scoped chunks (Supabase schema, linked repo data)
+      if (projectId) {
+        for (const q of allQueries) {
+          const queryEmbedding = await embedQuery(q, VOYAGE_API_KEY);
+          if (!queryEmbedding) continue;
+
+          const { data: projectResults, error: projectError } = await supabase
+            .rpc('match_document_chunks_by_project', {
+              query_embedding: queryEmbedding,
+              match_project_id: projectId,
+              match_threshold: 0.4,
+              match_count: 5,
+            });
+
+          if (projectError) {
+            console.error('Project-scoped vector search error:', projectError);
+            continue;
+          }
+
+          if (projectResults) {
+            for (const result of projectResults) {
+              const existing = allCandidates.get(result.id);
+              if (!existing || (result.similarity && (!existing.similarity || result.similarity > existing.similarity))) {
+                allCandidates.set(result.id, result);
+              }
             }
           }
         }

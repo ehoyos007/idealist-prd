@@ -52,7 +52,7 @@ function deserializeMessages(raw: unknown[]): ConversationMessage[] {
   });
 }
 
-export function useSessionPersistence() {
+export function useSessionPersistence(userId?: string) {
   const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pausedSessions, setPausedSessions] = useState<SavedSession[]>([]);
 
@@ -80,6 +80,7 @@ export function useSessionPersistence() {
         transcript,
         metadata: { remixSourceName, ...extraMetadata },
         updated_at: now,
+        ...(userId ? { user_id: userId } : {}),
       };
 
       if (status === 'paused') record.paused_at = now;
@@ -124,11 +125,17 @@ export function useSessionPersistence() {
   }, []);
 
   const fetchPausedSessions = useCallback(async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('prd_sessions')
       .select('*')
       .eq('status', 'paused')
       .order('updated_at', { ascending: false });
+
+    if (userId) {
+      query = query.or(`user_id.eq.${userId},user_id.is.null`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Failed to fetch paused sessions:', error.message);
@@ -150,7 +157,7 @@ export function useSessionPersistence() {
     }));
 
     setPausedSessions(sessions);
-  }, []);
+  }, [userId]);
 
   const deleteSession = useCallback(async (id: string) => {
     const { error } = await supabase.from('prd_sessions').delete().eq('id', id);

@@ -28,14 +28,45 @@ const PRIORITY_FILES = [
 
 // ─── GitHub API Helpers ───
 
+let _userGithubToken: string | null = null;
+
 async function githubFetch(url: string): Promise<Response> {
-  const token = Deno.env.get("GITHUB_TOKEN");
+  const token = _userGithubToken || Deno.env.get("GITHUB_TOKEN");
   return fetch(url, {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Accept: "application/vnd.github+json",
     },
   });
+}
+
+async function resolveUserGithubToken(req: Request): Promise<void> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return;
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: { user } } = await serviceClient.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
+    if (!user) return;
+
+    const { data: profile } = await serviceClient
+      .from("idealist_profiles")
+      .select("github_access_token")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.github_access_token) {
+      _userGithubToken = profile.github_access_token;
+    }
+  } catch (err) {
+    console.warn("Could not resolve user GitHub token:", err);
+  }
 }
 
 function parseRepoInput(input: string): { owner: string; repo: string } | null {
@@ -260,6 +291,10 @@ serve(async (req) => {
   if (authError) return authError;
 
   try {
+    // Try to use the authenticated user's GitHub token for private repo access
+    _userGithubToken = null;
+    await resolveUserGithubToken(req);
+
     const { repoUrl, sessionId, depth, userContext } = await req.json();
 
     if (!repoUrl) {
@@ -318,6 +353,19 @@ serve(async (req) => {
       }
     }
 
+    // 3b. Auto-detect Supabase project from config
+    let detectedSupabaseRef: string | null = null;
+    if (allPaths.includes("supabase/config.toml")) {
+      const configContent = await fetchFileContent(owner, repo, "supabase/config.toml");
+      if (configContent) {
+        const match = configContent.match(/project_id\s*=\s*"([^"]+)"/);
+        if (match) {
+          detectedSupabaseRef = match[1];
+          console.log(`Auto-detected Supabase project: ${detectedSupabaseRef}`);
+        }
+      }
+    }
+
     // 4. Resolve depth
     let resolvedDepth: "summary" | "deep";
     if (depth === "summary") {
@@ -344,6 +392,7 @@ serve(async (req) => {
         chunksCreated: 0,
         tree: allPaths.slice(0, 200),
         resolvedDepth: "summary",
+        ...(detectedSupabaseRef ? { detectedSupabaseRef } : {}),
       });
     }
 
@@ -445,6 +494,7 @@ serve(async (req) => {
       chunksCreated: totalChunks,
       tree: allPaths.slice(0, 200),
       resolvedDepth: "deep",
+      ...(detectedSupabaseRef ? { detectedSupabaseRef } : {}),
     });
   } catch (error: unknown) {
     const errorMessage =

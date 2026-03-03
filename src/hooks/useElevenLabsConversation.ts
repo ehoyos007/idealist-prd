@@ -104,6 +104,8 @@ export function useElevenLabsConversation() {
   const sessionIdRef = useRef<string | null>(null);
   const sendContextualUpdateRef = useRef<((text: string) => void) | null>(null);
 
+  const projectIdRef = useRef<string | null>(null);
+
   const retrieveAndInjectContext = useCallback(
     async (query: string, currentSessionId: string) => {
       try {
@@ -115,6 +117,7 @@ export function useElevenLabsConversation() {
         const { data, error } = await invokeFunction('retrieve-context', {
           query,
           sessionId: currentSessionId,
+          projectId: projectIdRef.current || undefined,
           limit: 3,
         });
 
@@ -504,5 +507,6 @@ export function useElevenLabsConversation() {
     sendRepoContext,
     sendTextMessage,
     getSessionId,
+    setProjectId: (id: string | null) => { projectIdRef.current = id; },
   };
 }

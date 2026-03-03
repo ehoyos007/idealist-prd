@@ -5,21 +5,25 @@ import { HomeView } from '@/components/HomeView';
 import { SessionView } from '@/components/SessionView';
 import { LibraryView } from '@/components/LibraryView';
 import { ProjectDetailView } from '@/components/ProjectDetailView';
+import { AuthGate } from '@/components/AuthGate';
+import { useAuth } from '@/hooks/useAuth';
 import { useProjectsStorage } from '@/hooks/useProjectsStorage';
 import { useSessionPersistence } from '@/hooks/useSessionPersistence';
+import { SettingsView } from '@/components/SettingsView';
 import { ProjectCard } from '@/types/project';
 
-type View = 'home' | 'session' | 'library' | 'project';
+type View = 'home' | 'session' | 'library' | 'project' | 'settings';
 
 const Index = () => {
+  const { user, profile, isLoading, isAllowed, signInWithGitHub, signOut, updateProfile } = useAuth();
   const [currentView, setCurrentView] = useState<View>('home');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [remixProjectId, setRemixProjectId] = useState<string | null>(null);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [sessionMode, setSessionMode] = useState<'prd' | 'vision'>('prd');
   const [visionTargetProjectId, setVisionTargetProjectId] = useState<string | null>(null);
-  const { projects, saveProject, saveDraftProject, deleteProject, getProject } = useProjectsStorage();
-  const { pausedSessions, fetchPausedSessions, deleteSession } = useSessionPersistence();
+  const { projects, saveProject, saveDraftProject, deleteProject, getProject } = useProjectsStorage(user?.id);
+  const { pausedSessions, fetchPausedSessions, deleteSession } = useSessionPersistence(user?.id);
 
   const handleStartSession = () => {
     setRemixProjectId(null);
@@ -116,7 +120,7 @@ const Index = () => {
     setCurrentView('project');
   };
 
-  const handleNavigate = (view: 'home' | 'library') => {
+  const handleNavigate = (view: 'home' | 'library' | 'settings') => {
     setCurrentView(view);
     if (view === 'home') {
       setSelectedProjectId(null);
@@ -132,54 +136,79 @@ const Index = () => {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <div className="min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden w-full">
-        <Header currentView={currentView} onNavigate={handleNavigate} />
+      <AuthGate
+        user={user}
+        isLoading={isLoading}
+        isAllowed={isAllowed}
+        onSignIn={signInWithGitHub}
+        onSignOut={signOut}
+      >
+        <div className="min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden w-full">
+          <Header
+            currentView={currentView}
+            onNavigate={handleNavigate}
+            user={profile ? {
+              avatarUrl: profile.github_avatar_url || undefined,
+              displayName: profile.display_name || undefined,
+              githubUsername: profile.github_username,
+            } : undefined}
+            onSignOut={signOut}
+          />
 
-        <main className="flex-1 flex flex-col">
-          {currentView === 'home' && (
-            <HomeView
-              onStartSession={handleStartSession}
-              projectCount={projects.length}
-            />
-          )}
+          <main className="flex-1 flex flex-col">
+            {currentView === 'home' && (
+              <HomeView
+                onStartSession={handleStartSession}
+                projectCount={projects.length}
+              />
+            )}
 
-          {currentView === 'session' && (
-            <SessionView
-              onComplete={handleSessionComplete}
-              onCancel={handleSessionCancel}
-              onDraftSaved={handleDraftSaved}
-              saveDraftProject={saveDraftProject}
-              remixProject={remixProject}
-              resumeSessionId={resumeSessionId}
-              onPause={handleSessionPause}
-              sessionMode={sessionMode}
-              visionTargetProject={visionTargetProject}
-              onVisionComplete={handleVisionComplete}
-            />
-          )}
+            {currentView === 'session' && (
+              <SessionView
+                onComplete={handleSessionComplete}
+                onCancel={handleSessionCancel}
+                onDraftSaved={handleDraftSaved}
+                saveDraftProject={saveDraftProject}
+                remixProject={remixProject}
+                resumeSessionId={resumeSessionId}
+                onPause={handleSessionPause}
+                sessionMode={sessionMode}
+                visionTargetProject={visionTargetProject}
+                onVisionComplete={handleVisionComplete}
+              />
+            )}
 
-          {currentView === 'library' && (
-            <LibraryView
-              projects={projects}
-              onSelectProject={handleSelectProject}
-              pausedSessions={pausedSessions}
-              onResumeDraft={handleResumeDraft}
-              onDeleteDraft={handleDeleteDraft}
-            />
-          )}
+            {currentView === 'library' && (
+              <LibraryView
+                projects={projects}
+                onSelectProject={handleSelectProject}
+                pausedSessions={pausedSessions}
+                onResumeDraft={handleResumeDraft}
+                onDeleteDraft={handleDeleteDraft}
+              />
+            )}
 
-          {currentView === 'project' && selectedProject && (
-            <ProjectDetailView
-              project={selectedProject}
-              onSave={saveProject}
-              onDelete={deleteProject}
-              onBack={() => setCurrentView('library')}
-              onRemix={() => handleRemixProject(selectedProject.id)}
-              onStartVisionSession={() => handleStartVisionSession(selectedProject.id)}
-            />
-          )}
-        </main>
-      </div>
+            {currentView === 'project' && selectedProject && (
+              <ProjectDetailView
+                project={selectedProject}
+                onSave={saveProject}
+                onDelete={deleteProject}
+                onBack={() => setCurrentView('library')}
+                onRemix={() => handleRemixProject(selectedProject.id)}
+                onStartVisionSession={() => handleStartVisionSession(selectedProject.id)}
+              />
+            )}
+
+            {currentView === 'settings' && (
+              <SettingsView
+                profile={profile}
+                onUpdateProfile={updateProfile}
+                onSignOut={signOut}
+              />
+            )}
+          </main>
+        </div>
+      </AuthGate>
     </ThemeProvider>
   );
 };
