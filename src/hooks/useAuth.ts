@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeFunction } from '@/lib/supabaseHelpers';
 import type { User } from '@supabase/supabase-js';
@@ -24,8 +24,8 @@ export function useAuth() {
   const [profile, setProfile] = useState<IdealistProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
+  const authCheckDone = useRef(false);
 
-  // Single edge function call that handles both allowlist check AND profile sync
   const syncAuthState = useCallback(async (providerToken?: string | null) => {
     try {
       const { data, error } = await invokeFunction<AuthCheckResponse>('check-allowlist', {
@@ -49,16 +49,46 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const authUser = session?.user ?? null;
-      setUser(authUser);
-
-      if (authUser) {
-        await syncAuthState(session?.provider_token);
+    // Safety timeout — never stay on loading screen for more than 8 seconds
+    const timeout = setTimeout(() => {
+      if (!authCheckDone.current) {
+        console.warn('Auth check timed out — showing login');
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    }, 8000);
+
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('getSession error:', error.message);
+          // Clear corrupted session
+          await supabase.auth.signOut().catch(() => {});
+          setUser(null);
+          setIsLoading(false);
+          authCheckDone.current = true;
+          return;
+        }
+
+        const authUser = session?.user ?? null;
+        setUser(authUser);
+
+        if (authUser) {
+          await syncAuthState(session?.provider_token);
+        }
+      } catch (err) {
+        console.error('Auth init error:', err);
+        // Clear any bad state
+        await supabase.auth.signOut().catch(() => {});
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+        authCheckDone.current = true;
+      }
+    };
+
+    initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -67,18 +97,23 @@ export function useAuth() {
         setUser(authUser);
 
         if (event === 'SIGNED_IN' && authUser) {
-          // Critical: capture provider_token on SIGNED_IN (only available once)
           await syncAuthState(session?.provider_token);
           setIsLoading(false);
+          authCheckDone.current = true;
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsAllowed(null);
           setIsLoading(false);
+          authCheckDone.current = true;
         }
+        // Ignore TOKEN_REFRESHED — no need to re-check allowlist
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, [syncAuthState]);
 
   const signInWithGitHub = useCallback(async () => {
@@ -100,7 +135,6 @@ export function useAuth() {
 
   const updateProfile = useCallback(async (updates: Partial<Pick<IdealistProfile, 'supabase_management_token'>>) => {
     if (!user) return;
-    // Use edge function to update profile since PostgREST may not see the table
     const { data, error } = await invokeFunction<{ profile: IdealistProfile }>('update-profile', updates);
 
     if (error) {
