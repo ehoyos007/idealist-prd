@@ -1,5 +1,65 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-03 (Session 19 — GitHub OAuth, Repo Dropdown, Supabase Deep Context, Settings)
+
+**Summary:** Added GitHub OAuth login with allowlist+invite system, searchable repo dropdown, Supabase Management API deep context integration, and a 3-tab Settings page. All auth operations routed through edge functions to bypass PostgREST schema cache issues.
+
+### What was done
+
+**Phase 1 — Database (1 migration)**
+1. Created `20260308000000_add_auth_tables.sql` — 4 new tables (`idealist_allowed_users`, `idealist_profiles`, `idealist_supabase_projects`), `user_id` columns on `prd_projects`/`prd_sessions`/`prd_document_chunks`, `match_document_chunks_by_project` RPC
+
+**Phase 2 — GitHub OAuth Login (4 files)**
+2. Created `src/hooks/useAuth.ts` — GitHub OAuth via Supabase Auth, session tracking, profile sync via edge function
+3. Created `src/components/AuthGate.tsx` — login wall, access denied state, loading states
+4. Created `supabase/functions/check-allowlist/index.ts` — combined allowlist check + profile upsert via service role (bypasses PostgREST cache)
+5. Guided user through GitHub OAuth App creation + Supabase provider config
+
+**Phase 3 — Repo Dropdown (4 files)**
+6. Created `supabase/functions/list-github-repos/index.ts` — lists user's repos using their OAuth token
+7. Created `src/hooks/useGitHubRepos.ts` — debounced search, pagination
+8. Created `src/components/RepoDropdown.tsx` — Popover + Command (cmdk) searchable dropdown with manual URL fallback
+9. Upgraded `RepoConnectButton.tsx` — replaced URL text input with RepoDropdown
+
+**Phase 4 — Settings Page (3 files)**
+10. Created `src/components/SettingsView.tsx` — 3-tab layout (GitHub account, Supabase Management token, Repo browser with project linker)
+11. Created `src/hooks/useSupabaseProjects.ts` — CRUD for repo-to-Supabase project links
+12. Created `supabase/functions/update-profile/index.ts` — profile updates via edge function
+
+**Phase 5 — Supabase Deep Context (2 files)**
+13. Created `supabase/functions/fetch-supabase-schema/index.ts` — fetches schema, tables, RLS, edge functions, storage from Management API, chunks + embeds with voyage-code-3 for RAG
+14. Created `src/hooks/useSupabaseManagement.ts` — trigger schema fetch, track status
+
+**Phase 6 — RAG Integration (2 files modified)**
+15. Updated `supabase/functions/retrieve-context/index.ts` — project-scoped chunk retrieval for Supabase schema data
+16. Updated `src/hooks/useElevenLabsConversation.ts` — `setProjectId()` to pass project context to retrieval
+
+**Auth + App Shell Updates (5 files modified)**
+17. Updated `src/pages/Index.tsx` — AuthGate wrapper, settings view, user-scoped hooks
+18. Updated `src/components/Header.tsx` — user avatar dropdown, settings nav, sign out
+19. Updated `src/hooks/useProjectsStorage.ts` — user-scoped queries
+20. Updated `src/hooks/useSessionPersistence.ts` — user-scoped queries
+21. Updated `supabase/functions/fetch-github-repo/index.ts` — uses user's OAuth token for private repos, auto-detects Supabase project from config.toml
+
+**Bug fixes during deployment**
+22. Fixed allowlist username (`enzohoyos` → `ehoyos007`) via migration
+23. Fixed auth loading hang — PostgREST schema cache didn't see new tables; refactored all auth ops through edge functions using service role client
+
+### Deployment
+- 3 new edge functions deployed (check-allowlist, list-github-repos, fetch-supabase-schema, update-profile)
+- 2 updated edge functions redeployed (fetch-github-repo, retrieve-context)
+- 3 migrations pushed (auth tables, allowlist fix, schema cache reload)
+- 2 commits pushed to GitHub main (`866da65`, `c5db25d`)
+
+### What remains
+- Verify GitHub OAuth login flow end-to-end after PostgREST cache fix
+- Test repo dropdown with real repos
+- Test Supabase Management token + schema fetch in Settings
+- Test private repo access via OAuth token
+- Generate a Supabase Management API token for deep context features
+
+---
+
 ## Session: 2026-03-02 (Session 18 — Vision System Deploy & Smoke Test)
 
 **Summary:** Deployed Vision System end-to-end — migration, 6 edge functions, API smoke test passed, committed and pushed to GitHub/Vercel.
