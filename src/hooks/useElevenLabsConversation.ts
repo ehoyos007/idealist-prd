@@ -229,16 +229,11 @@ export function useElevenLabsConversation() {
           ? { signedUrl: tokenData.token }
           : { agentId: tokenData.agentId };
 
-        // Pass overrideConfig from the server (always provided now for version-controlled prompts)
-        if (tokenData.overrideConfig) {
-          Object.assign(sessionConfig, { overrides: tokenData.overrideConfig });
-        }
-
         await conversation.startSession({
           ...sessionConfig,
         });
 
-        // For remix mode, also inject project context via contextual update for immediate awareness
+        // For remix mode, inject project context via contextual update post-connection
         if (projectContext) {
           const remixContext = buildRemixPrompt(projectContext);
           try {
@@ -291,10 +286,6 @@ export function useElevenLabsConversation() {
         const sessionConfig: Record<string, unknown> = tokenData.token
           ? { signedUrl: tokenData.token }
           : { agentId: tokenData.agentId };
-
-        if (tokenData.overrideConfig) {
-          Object.assign(sessionConfig, { overrides: tokenData.overrideConfig });
-        }
 
         await conversation.startSession({ ...sessionConfig });
 

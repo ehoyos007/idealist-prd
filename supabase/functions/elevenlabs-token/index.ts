@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { validateApiKey } from "../_shared/auth.ts";
-import { buildRemixPrompt, VOICE_AGENT_PROMPT } from "../_shared/prompts.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse();
@@ -34,19 +33,6 @@ serve(async (req) => {
 
     console.log('Requesting conversation token from ElevenLabs...', projectContext ? '(remix mode)' : '(new project)');
 
-    // Always pass overrideConfig so prompts are version-controlled in code
-    const overridePrompt = projectContext
-      ? buildRemixPrompt(projectContext)
-      : VOICE_AGENT_PROMPT;
-
-    const overrideConfig = {
-      agent: {
-        prompt: {
-          prompt: overridePrompt,
-        },
-      },
-    };
-
     // Request a signed conversation token from ElevenLabs
     const tokenUrl = `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${ELEVENLABS_AGENT_ID}`;
 
@@ -69,7 +55,6 @@ serve(async (req) => {
     return jsonResponse({
       token: data.signed_url || data.token,
       agentId: ELEVENLABS_AGENT_ID,
-      overrideConfig,
     });
   } catch (error) {
     console.error("Error generating token:", error);
