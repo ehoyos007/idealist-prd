@@ -10,9 +10,10 @@ interface ProjectDetailViewProps {
   onDelete: (id: string) => void;
   onBack: () => void;
   onRemix?: () => void;
+  onStartVisionSession?: () => void;
 }
 
-export function ProjectDetailView({ project, onSave, onDelete, onBack, onRemix }: ProjectDetailViewProps) {
+export function ProjectDetailView({ project, onSave, onDelete, onBack, onRemix, onStartVisionSession }: ProjectDetailViewProps) {
   const isMobile = useIsMobile();
 
   return (
@@ -33,6 +34,7 @@ export function ProjectDetailView({ project, onSave, onDelete, onBack, onRemix }
           onDelete={onDelete}
           onBack={onBack}
           onRemix={onRemix}
+          onStartVisionSession={onStartVisionSession}
         />
       </div>
     </div>

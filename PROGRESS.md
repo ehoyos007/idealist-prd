@@ -1,5 +1,39 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 17 — Vision System Integration, Route C Two-Phase)
+
+**Summary:** Implemented full Vision System integration — voice-first vision coaching sessions that produce VISION.md + EVAL.md alongside existing PRD, with Go Deeper button, Vision tab, enhanced ZIP export, and session persistence.
+
+### What was done
+
+**Backend (4 items)**
+1. Created DB migration `20260302000000_vision_columns.sql` — adds `vision_md`, `eval_md`, `vision_transcript` to `prd_projects`
+2. Added 5 new exports to `supabase/functions/_shared/prompts.ts`: `VISION_AGENT_PROMPT`, `VISION_AGENT_FIRST_MESSAGE`, `buildVisionContextPrompt()`, `buildVisionFirstMessage()`, `VISION_SYNTHESIS_PROMPT`
+3. Created `supabase/functions/synthesize-vision/index.ts` — edge function following synthesize-project pattern (Gemini 2.5 Pro via OpenRouter, `create_vision_docs` tool call)
+4. Added `[functions.synthesize-vision]` to `supabase/config.toml`
+
+**Frontend (10 items)**
+5. Extended `ProjectCard` type with `visionMd?`, `evalMd?`, `visionTranscript?` fields
+6. Updated `projectTransformers.ts` with DB ↔ TS mappings for vision columns
+7. Added `buildVisionContextPrompt()` + `mode` parameter to `useElevenLabsConversation.ts` `startConversation()`
+8. Added `sessionMode`/`visionTargetProjectId` state + `handleStartVisionSession`/`handleVisionComplete` to `Index.tsx`
+9. Updated `SessionView.tsx` — vision mode indicator badge, button text, synthesis call to `synthesize-vision`, vision metadata for pause/auto-save
+10. Updated `ProjectCardFull.tsx` — "Go Deeper: Vision Session" button (Eye icon, violet), Vision tab with VISION.md + EVAL.md display, "Redo Vision" variant
+11. Pass-through `onStartVisionSession` in `ProjectDetailView.tsx`
+12. Vision draft labels in `LibraryView.tsx` (violet badge + project name)
+13. Enhanced `generateProjectZip.ts` — conditionally adds VISION.md + EVAL.md, enhances CLAUDE.md with Vision-Guided Development instructions
+14. Session persistence already supported `extraMetadata` — wired vision metadata through
+
+**Verification:** `npm run build` passes with zero errors (479 lines added, 37 removed across 14 files).
+
+### Not yet done
+- Deploy migration to Supabase
+- Deploy `synthesize-vision` edge function
+- End-to-end testing of full vision flow
+- Redeploy updated shared `prompts.ts` (used by synthesize-vision)
+
+---
+
 ## Session: 2026-03-02 (Session 16 — Deploy & Test GitHub Repo + Cost Logging)
 
 **Summary:** Deployed Connect GitHub Repo feature end-to-end, fixed deep indexing bug (session_id NOT NULL), tested all 3 modes (summary/deep/auto), added estimated_cost to usage logging.

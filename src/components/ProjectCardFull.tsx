@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Pencil, Save, X, Copy, Download, FileText, Film, Trash2, MoreVertical, Sparkles, Files, FolderArchive, Loader2, RefreshCw } from 'lucide-react';
+import { Pencil, Save, X, Copy, Download, FileText, Film, Trash2, MoreVertical, Sparkles, Files, FolderArchive, Loader2, RefreshCw, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 import { generatePdf } from '@/lib/generatePdf';
@@ -30,9 +30,10 @@ interface ProjectCardFullProps {
   onDelete: (id: string) => void;
   onBack: () => void;
   onRemix?: () => void;
+  onStartVisionSession?: () => void;
 }
 
-export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix }: ProjectCardFullProps) {
+export function ProjectCardFull({ project, onSave, onDelete, onBack, onRemix, onStartVisionSession }: ProjectCardFullProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProject, setEditedProject] = useState<ProjectCard>(project);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -233,6 +234,16 @@ ${p.firstSprintPlan}
 
   const ActionButtons = () => (
     <>
+      {onStartVisionSession && !project.visionMd && !isDraft && (
+        <Button variant="outline" size="icon" onClick={onStartVisionSession} title="Go Deeper: Vision Session" className="text-violet-400 border-violet-500/30 hover:bg-violet-500/10">
+          <Eye className="h-4 w-4" />
+        </Button>
+      )}
+      {onStartVisionSession && project.visionMd && !isDraft && (
+        <Button variant="ghost" size="icon" onClick={onStartVisionSession} title="Redo Vision Session" className="text-muted-foreground">
+          <Eye className="h-4 w-4" />
+        </Button>
+      )}
       {onRemix && (
         <Button variant="outline" size="icon" onClick={onRemix} title="Remix this project">
           <Sparkles className="h-4 w-4" />
@@ -271,6 +282,18 @@ ${p.firstSprintPlan}
           <SheetTitle className="font-mono">Actions</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-2 py-4">
+          {onStartVisionSession && !project.visionMd && !isDraft && (
+            <Button variant="outline" className="w-full justify-start text-violet-400" onClick={() => { onStartVisionSession(); setIsActionsOpen(false); }}>
+              <Eye className="h-4 w-4 mr-3" />
+              Go Deeper: Vision Session
+            </Button>
+          )}
+          {onStartVisionSession && project.visionMd && !isDraft && (
+            <Button variant="ghost" className="w-full justify-start text-muted-foreground" onClick={() => { onStartVisionSession(); setIsActionsOpen(false); }}>
+              <Eye className="h-4 w-4 mr-3" />
+              Redo Vision Session
+            </Button>
+          )}
           {onRemix && (
             <Button variant="outline" className="w-full justify-start" onClick={() => { onRemix(); setIsActionsOpen(false); }}>
               <Sparkles className="h-4 w-4 mr-3" />
@@ -390,6 +413,12 @@ ${p.firstSprintPlan}
             <FileText className="h-3.5 w-3.5 mr-1.5" />
             Document
           </TabsTrigger>
+          {editedProject.visionMd && (
+            <TabsTrigger value="vision" className="font-mono text-xs uppercase tracking-wider">
+              <Eye className="h-3.5 w-3.5 mr-1.5" />
+              Vision
+            </TabsTrigger>
+          )}
           <TabsTrigger value="video" className="font-mono text-xs uppercase tracking-wider">
             <Film className="h-3.5 w-3.5 mr-1.5" />
             Video Preview
@@ -496,6 +525,43 @@ ${p.firstSprintPlan}
             )}
           </ScrollArea>
         </TabsContent>
+
+        {editedProject.visionMd && (
+          <TabsContent value="vision" className="flex-1 min-h-0 mt-0">
+            <ScrollArea className="h-full">
+              <div className="mb-6">
+                <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">
+                  <Eye className="h-4 w-4 inline mr-2" />
+                  VISION.md
+                </h3>
+                <div className="border-2 border-violet-500/30 p-4 bg-violet-500/5">
+                  <pre className="text-sm font-mono whitespace-pre-wrap break-words text-foreground">{editedProject.visionMd}</pre>
+                </div>
+              </div>
+
+              {editedProject.evalMd && (
+                <div className="mb-6">
+                  <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">
+                    <FileText className="h-4 w-4 inline mr-2" />
+                    EVAL.md
+                  </h3>
+                  <div className="border-2 border-violet-500/30 p-4 bg-violet-500/5">
+                    <pre className="text-sm font-mono whitespace-pre-wrap break-words text-foreground">{editedProject.evalMd}</pre>
+                  </div>
+                </div>
+              )}
+
+              {editedProject.visionTranscript && (
+                <div className="mb-6">
+                  <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground mb-2">Vision Session Transcript</h3>
+                  <div className="border-2 border-primary p-4 bg-secondary max-h-48 overflow-y-auto overflow-x-hidden">
+                    <pre className="text-sm font-mono whitespace-pre-wrap break-words text-muted-foreground">{editedProject.visionTranscript}</pre>
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+        )}
 
         <TabsContent value="video" className="flex-1 mt-0">
           <Suspense

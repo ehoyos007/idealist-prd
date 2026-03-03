@@ -9,7 +9,7 @@ import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { useSessionPersistence } from '@/hooks/useSessionPersistence';
 import { invokeFunction } from '@/lib/supabaseHelpers';
 import { ProjectCard, UploadedFile, ConnectedRepo } from '@/types/project';
-import { Mic, Square, Loader2, Sparkles, Upload, Pause } from 'lucide-react';
+import { Mic, Square, Loader2, Sparkles, Upload, Pause, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,9 @@ interface SessionViewProps {
   remixProject?: ProjectCard;
   resumeSessionId?: string | null;
   onPause?: () => void;
+  sessionMode?: 'prd' | 'vision';
+  visionTargetProject?: ProjectCard;
+  onVisionComplete?: (visionMd: string, evalMd: string, visionTranscript: string) => void;
 }
 
 export function SessionView({
@@ -32,6 +35,9 @@ export function SessionView({
   remixProject,
   resumeSessionId,
   onPause,
+  sessionMode = 'prd',
+  visionTargetProject,
+  onVisionComplete,
 }: SessionViewProps) {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -60,7 +66,10 @@ export function SessionView({
   // B2: Auto-save while connected
   useEffect(() => {
     if (status === 'connected' && sessionId) {
-      startAutoSave(() => messages, sessionId, remixProject?.projectName);
+      const visionMeta = sessionMode === 'vision' && visionTargetProject
+        ? { sessionMode: 'vision' as const, visionTargetProjectId: visionTargetProject.id, visionTargetProjectName: visionTargetProject.projectName }
+        : undefined;
+      startAutoSave(() => messages, sessionId, remixProject?.projectName, visionMeta);
     }
     return () => stopAutoSave();
   }, [status, sessionId]);
@@ -191,7 +200,11 @@ export function SessionView({
   );
 
   const handleStart = async () => {
-    await startConversation(remixProject);
+    if (sessionMode === 'vision' && visionTargetProject) {
+      await startConversation(visionTargetProject, 'vision');
+    } else {
+      await startConversation(remixProject, remixProject ? 'remix' : 'prd');
+    }
   };
 
   // B2: Pause session
@@ -201,11 +214,15 @@ export function SessionView({
     stopAutoSave();
 
     if (currentSessionId && messages.length > 0) {
+      const metadata = sessionMode === 'vision' && visionTargetProject
+        ? { sessionMode: 'vision' as const, visionTargetProjectId: visionTargetProject.id, visionTargetProjectName: visionTargetProject.projectName }
+        : undefined;
       await saveSession(
         messages,
         'paused',
         currentSessionId,
-        remixProject?.projectName
+        remixProject?.projectName,
+        metadata
       );
       toast({
         title: 'Session paused',
@@ -231,7 +248,9 @@ export function SessionView({
       setIsGenerating(false);
       toast({
         title: 'Not enough conversation',
-        description: 'Have a longer conversation to generate a project card.',
+        description: sessionMode === 'vision'
+          ? 'Have a longer conversation to generate vision docs.'
+          : 'Have a longer conversation to generate a project card.',
         variant: 'destructive',
       });
       onCancel();
@@ -241,19 +260,60 @@ export function SessionView({
     if (wordCount < 50) {
       toast({
         title: 'Short conversation',
-        description: 'Your conversation is brief — the generated PRD may have gaps marked as "[Needs Discussion]".',
+        description: sessionMode === 'vision'
+          ? 'Your conversation is brief — the generated vision docs may have gaps marked as "[Needs Discussion]".'
+          : 'Your conversation is brief — the generated PRD may have gaps marked as "[Needs Discussion]".',
       });
-    }
-
-    const projectId = crypto.randomUUID();
-
-    if (saveDraftProject) {
-      await saveDraftProject(projectId, transcript);
     }
 
     // Mark any paused session as completed
     if (resumeSessionId || currentSessionId) {
       await saveSession(messages, 'completed', resumeSessionId || currentSessionId!);
+    }
+
+    // Vision mode: synthesize vision docs
+    if (sessionMode === 'vision' && visionTargetProject && onVisionComplete) {
+      try {
+        const { data, error: invokeError } = await invokeFunction('synthesize-vision', {
+          transcript,
+          projectContext: visionTargetProject,
+        });
+
+        if (invokeError) {
+          throw new Error(invokeError.message);
+        }
+
+        const result = data as { visionMd?: string; evalMd?: string } | null;
+
+        if (!result?.visionMd || !result?.evalMd) {
+          throw new Error('No vision documents generated');
+        }
+
+        toast({
+          title: 'Vision docs generated!',
+          description: 'Your conversation has been synthesized into VISION.md and EVAL.md.',
+        });
+
+        onVisionComplete(result.visionMd, result.evalMd, transcript);
+      } catch (err) {
+        console.error('Error generating vision docs:', err);
+        toast({
+          title: 'Generation failed',
+          description: 'Could not generate vision documents. Please try again.',
+          variant: 'destructive',
+        });
+        onCancel();
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
+
+    // PRD mode: synthesize project card
+    const projectId = crypto.randomUUID();
+
+    if (saveDraftProject) {
+      await saveDraftProject(projectId, transcript);
     }
 
     try {
@@ -326,12 +386,18 @@ export function SessionView({
     await handleFileProcessed(file, content);
   };
 
+  const isVisionMode = sessionMode === 'vision';
+
   if (isGenerating) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <Loader2 className="h-16 w-16 animate-spin mb-6" />
-        <h2 className="text-2xl font-bold mb-2">Generating your project card...</h2>
-        <p className="text-muted-foreground font-mono">Synthesizing the conversation into a structured PRD</p>
+        <h2 className="text-2xl font-bold mb-2">
+          {isVisionMode ? 'Generating your vision docs...' : 'Generating your project card...'}
+        </h2>
+        <p className="text-muted-foreground font-mono">
+          {isVisionMode ? 'Synthesizing the conversation into VISION.md and EVAL.md' : 'Synthesizing the conversation into a structured PRD'}
+        </p>
       </div>
     );
   }
@@ -350,8 +416,16 @@ export function SessionView({
     <div className="flex-1 flex flex-col p-4 md:p-8">
       {/* Top area - Voice orb and controls */}
       <div className="flex flex-col items-center mb-8">
-        {/* Remix indicator */}
-        {remixProject && (
+        {/* Session mode indicator */}
+        {isVisionMode && visionTargetProject && (
+          <div className="mb-4 flex items-center gap-2">
+            <Badge variant="secondary" className="font-mono text-sm px-3 py-1 bg-violet-500/10 text-violet-400 border-violet-500/30">
+              <Eye className="h-3 w-3 mr-2" />
+              Vision Session: {visionTargetProject.projectName}
+            </Badge>
+          </div>
+        )}
+        {!isVisionMode && remixProject && (
           <div className="mb-4 flex items-center gap-2">
             <Badge variant="secondary" className="font-mono text-sm px-3 py-1">
               <Sparkles className="h-3 w-3 mr-2" />
@@ -375,8 +449,8 @@ export function SessionView({
                 Cancel
               </Button>
               <Button onClick={handleStart} className="font-mono">
-                {remixProject ? <Sparkles className="h-4 w-4 mr-2" /> : <Mic className="h-4 w-4 mr-2" />}
-                {remixProject ? 'Start Remixing' : 'Start Talking'}
+                {isVisionMode ? <Eye className="h-4 w-4 mr-2" /> : remixProject ? <Sparkles className="h-4 w-4 mr-2" /> : <Mic className="h-4 w-4 mr-2" />}
+                {isVisionMode ? 'Start Vision Session' : remixProject ? 'Start Remixing' : 'Start Talking'}
               </Button>
             </>
           )}
@@ -402,8 +476,17 @@ export function SessionView({
               </Button>
               <Button onClick={handleEnd} variant="destructive" className="font-mono text-sm">
                 <Square className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">End & Generate Card</span>
-                <span className="sm:hidden">Generate Card</span>
+                {isVisionMode ? (
+                  <>
+                    <span className="hidden sm:inline">End & Generate Vision</span>
+                    <span className="sm:hidden">Generate Vision</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">End & Generate Card</span>
+                    <span className="sm:hidden">Generate Card</span>
+                  </>
+                )}
               </Button>
             </>
           )}

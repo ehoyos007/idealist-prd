@@ -39,6 +39,9 @@ export interface ProjectCard {
   remixedFromId?: string;
   remixedFromTitle?: string;
   documents?: ProjectDocument[];
+  visionMd?: string;
+  evalMd?: string;
+  visionTranscript?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -61,7 +61,8 @@ export function useSessionPersistence() {
       messages: ConversationMessage[],
       status: 'active' | 'paused' | 'completed' | 'abandoned',
       sessionId: string,
-      remixSourceName?: string
+      remixSourceName?: string,
+      extraMetadata?: Record<string, unknown>
     ) => {
       const now = new Date().toISOString();
       const transcript = messages
@@ -77,7 +78,7 @@ export function useSessionPersistence() {
         status,
         messages: serializeMessages(messages),
         transcript,
-        metadata: { remixSourceName },
+        metadata: { remixSourceName, ...extraMetadata },
         updated_at: now,
       };
 
@@ -163,7 +164,8 @@ export function useSessionPersistence() {
     (
       getMessages: () => ConversationMessage[],
       sessionId: string,
-      remixSourceName?: string
+      remixSourceName?: string,
+      extraMetadata?: Record<string, unknown>
     ) => {
       if (autoSaveIntervalRef.current) {
         clearInterval(autoSaveIntervalRef.current);
@@ -171,7 +173,7 @@ export function useSessionPersistence() {
       autoSaveIntervalRef.current = setInterval(() => {
         const msgs = getMessages();
         if (msgs.length > 0) {
-          saveSession(msgs, 'active', sessionId, remixSourceName);
+          saveSession(msgs, 'active', sessionId, remixSourceName, extraMetadata);
         }
       }, 60_000);
     },

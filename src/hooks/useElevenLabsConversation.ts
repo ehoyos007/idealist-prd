@@ -63,6 +63,35 @@ function buildRemixFirstMessage(projectName: string): string {
   return `Hey! I've reviewed your project '${projectName}'. What aspects would you like to change or explore further?`;
 }
 
+function buildVisionContextPrompt(project: ProjectCard): string {
+  return `You are a product vision coach helping the user define how decisions should be made during development.
+
+You are in VISION mode — the user has already completed a PRD and now wants to define the intent layer: decision frameworks, constraints, acceptance criteria, and decomposition patterns.
+
+Here is their completed PRD:
+- Project Name: ${project.projectName}
+- Tagline: ${project.tagline}
+- Vision: ${project.vision}
+- Problem Statement: ${project.problemStatement}
+- Target User: ${project.targetUser}
+- Core Features: ${project.coreFeatures}
+- Tech Stack: ${project.techStack}
+- Architecture: ${project.architecture}
+- Success Metrics: ${project.successMetrics}
+- Risks & Open Questions: ${project.risksAndOpenQuestions}
+- First Sprint Plan: ${project.firstSprintPlan}
+
+DO NOT re-ask PRD-level questions. The PRD is done. Focus on these 4 areas:
+
+1. DECISION FRAMEWORK — How should trade-offs be made? Simplicity vs. flexibility? Speed vs. polish? Convention vs. innovation?
+2. CONSTRAINT ARCHITECTURE — What are the hard musts and must-nots? Preferences? Escalation triggers?
+3. ACCEPTANCE CRITERIA — What does "done" look like? What separates "works" from "right"?
+4. DECOMPOSITION PATTERNS — How should work be broken down? Ideal task size? Integration approach?
+
+Ask 1-2 questions at a time. Push for specificity. Keep responses concise — this is a voice conversation.
+After covering all 4 areas, tell the user they can end the session.`;
+}
+
 export function useElevenLabsConversation() {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [isSpeakingState, setIsSpeakingState] = useState(false);
@@ -192,7 +221,7 @@ export function useElevenLabsConversation() {
   sendContextualUpdateRef.current = conversation.sendContextualUpdate;
 
   const startConversation = useCallback(
-    async (projectContext?: ProjectCard) => {
+    async (projectContext?: ProjectCard, mode?: 'prd' | 'remix' | 'vision') => {
       setStatus('connecting');
       setError(null);
       setMessages([]);
@@ -205,7 +234,7 @@ export function useElevenLabsConversation() {
       try {
         console.log(
           'Requesting ElevenLabs token...',
-          projectContext ? '(remix mode)' : '(new project)'
+          projectContext ? `(${mode || 'remix'} mode)` : '(new project)'
         );
         const { data, error: invokeError } = await invokeFunction(
           'elevenlabs-token',
@@ -233,8 +262,18 @@ export function useElevenLabsConversation() {
           ...sessionConfig,
         });
 
+        // For vision mode, inject vision context post-connection
+        if (mode === 'vision' && projectContext) {
+          const visionContext = buildVisionContextPrompt(projectContext);
+          try {
+            conversation.sendContextualUpdate(visionContext);
+            console.log('Vision context injected via sendContextualUpdate');
+          } catch (err) {
+            console.warn('Could not inject vision context:', err);
+          }
+        }
         // For remix mode, inject project context via contextual update post-connection
-        if (projectContext) {
+        else if (projectContext) {
           const remixContext = buildRemixPrompt(projectContext);
           try {
             conversation.sendContextualUpdate(remixContext);

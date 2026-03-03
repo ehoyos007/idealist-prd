@@ -20,6 +20,9 @@ export interface ProjectDbRow {
   score_urgency: number;
   score_confidence: number;
   transcript: string | null;
+  vision_md: string | null;
+  eval_md: string | null;
+  vision_transcript: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +50,9 @@ export function dbRowToProjectCard(row: ProjectDbRow): ProjectCard {
       confidence: row.score_confidence,
     },
     transcript: row.transcript || undefined,
+    visionMd: row.vision_md || undefined,
+    evalMd: row.eval_md || undefined,
+    visionTranscript: row.vision_transcript || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -73,5 +79,8 @@ export function projectCardToDbRow(project: ProjectCard): Omit<ProjectDbRow, 'cr
     score_urgency: project.scores.urgency,
     score_confidence: project.scores.confidence,
     transcript: project.transcript || null,
+    vision_md: project.visionMd || null,
+    eval_md: project.evalMd || null,
+    vision_transcript: project.visionTranscript || null,
   };
 }

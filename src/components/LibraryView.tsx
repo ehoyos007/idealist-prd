@@ -5,7 +5,8 @@ import { ProjectCardPreview } from './ProjectCardPreview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { LayoutGrid, List, Search, Play, Trash2, Clock, MessageSquare } from 'lucide-react';
+import { LayoutGrid, List, Search, Play, Trash2, Clock, MessageSquare, Eye } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface LibraryViewProps {
   projects: ProjectCard[];
@@ -38,14 +39,31 @@ function DraftCard({
   const messageCount = session.messages.filter((m) => m.role !== 'context').length;
   const wordCount = session.transcript?.split(/\s+/).length || 0;
   const remixName = session.metadata?.remixSourceName as string | undefined;
+  const isVisionDraft = session.metadata?.sessionMode === 'vision';
+  const visionProjectName = session.metadata?.visionTargetProjectName as string | undefined;
 
   return (
-    <div className="border-2 border-dashed border-primary/50 p-4 flex flex-col gap-3">
+    <div className={cn(
+      "border-2 border-dashed p-4 flex flex-col gap-3",
+      isVisionDraft ? "border-violet-500/50" : "border-primary/50"
+    )}>
       <div className="flex items-center gap-2">
-        <Badge variant="secondary" className="font-mono text-xs">
-          Draft
-        </Badge>
-        {remixName && (
+        {isVisionDraft ? (
+          <Badge variant="secondary" className="font-mono text-xs bg-violet-500/10 text-violet-400 border-violet-500/30">
+            <Eye className="h-3 w-3 mr-1" />
+            Vision
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="font-mono text-xs">
+            Draft
+          </Badge>
+        )}
+        {isVisionDraft && visionProjectName && (
+          <span className="text-xs text-muted-foreground font-mono truncate">
+            for {visionProjectName}
+          </span>
+        )}
+        {!isVisionDraft && remixName && (
           <span className="text-xs text-muted-foreground font-mono truncate">
             Remix of {remixName}
           </span>

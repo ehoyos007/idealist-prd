@@ -16,12 +16,16 @@ const Index = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [remixProjectId, setRemixProjectId] = useState<string | null>(null);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
+  const [sessionMode, setSessionMode] = useState<'prd' | 'vision'>('prd');
+  const [visionTargetProjectId, setVisionTargetProjectId] = useState<string | null>(null);
   const { projects, saveProject, saveDraftProject, deleteProject, getProject } = useProjectsStorage();
   const { pausedSessions, fetchPausedSessions, deleteSession } = useSessionPersistence();
 
   const handleStartSession = () => {
     setRemixProjectId(null);
     setResumeSessionId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     setCurrentView('session');
   };
 
@@ -29,6 +33,8 @@ const Index = () => {
     saveProject(project);
     setRemixProjectId(null);
     setResumeSessionId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     setSelectedProjectId(project.id);
     setCurrentView('project');
   };
@@ -36,12 +42,16 @@ const Index = () => {
   const handleSessionCancel = () => {
     setRemixProjectId(null);
     setResumeSessionId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     setCurrentView('home');
   };
 
   const handleDraftSaved = (projectId: string) => {
     setRemixProjectId(null);
     setResumeSessionId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     setSelectedProjectId(projectId);
     setCurrentView('project');
   };
@@ -54,6 +64,8 @@ const Index = () => {
   const handleRemixProject = (id: string) => {
     setRemixProjectId(id);
     setResumeSessionId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     setCurrentView('session');
   };
 
@@ -70,8 +82,38 @@ const Index = () => {
   const handleSessionPause = () => {
     setResumeSessionId(null);
     setRemixProjectId(null);
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
     fetchPausedSessions();
     setCurrentView('library');
+  };
+
+  const handleStartVisionSession = (projectId: string) => {
+    setVisionTargetProjectId(projectId);
+    setSessionMode('vision');
+    setRemixProjectId(null);
+    setResumeSessionId(null);
+    setCurrentView('session');
+  };
+
+  const handleVisionComplete = (visionMd: string, evalMd: string, visionTranscript: string) => {
+    if (visionTargetProjectId) {
+      const project = getProject(visionTargetProjectId);
+      if (project) {
+        const updatedProject: ProjectCard = {
+          ...project,
+          visionMd,
+          evalMd,
+          visionTranscript,
+          updatedAt: new Date().toISOString(),
+        };
+        saveProject(updatedProject);
+      }
+      setSelectedProjectId(visionTargetProjectId);
+    }
+    setSessionMode('prd');
+    setVisionTargetProjectId(null);
+    setCurrentView('project');
   };
 
   const handleNavigate = (view: 'home' | 'library') => {
@@ -86,6 +128,7 @@ const Index = () => {
 
   const selectedProject = selectedProjectId ? getProject(selectedProjectId) : null;
   const remixProject = remixProjectId ? getProject(remixProjectId) : undefined;
+  const visionTargetProject = visionTargetProjectId ? getProject(visionTargetProjectId) : undefined;
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
@@ -109,6 +152,9 @@ const Index = () => {
               remixProject={remixProject}
               resumeSessionId={resumeSessionId}
               onPause={handleSessionPause}
+              sessionMode={sessionMode}
+              visionTargetProject={visionTargetProject}
+              onVisionComplete={handleVisionComplete}
             />
           )}
 
@@ -129,6 +175,7 @@ const Index = () => {
               onDelete={deleteProject}
               onBack={() => setCurrentView('library')}
               onRemix={() => handleRemixProject(selectedProject.id)}
+              onStartVisionSession={() => handleStartVisionSession(selectedProject.id)}
             />
           )}
         </main>

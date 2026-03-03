@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.synthesize-project]
 verify_jwt = false
 
+[functions.synthesize-vision]
+verify_jwt = false
+
 [functions.parse-file-context]
 verify_jwt = false
 
