@@ -12,6 +12,33 @@ interface UsageParams {
   metadata?: Record<string, unknown>;
 }
 
+// Approximate cost per million tokens (USD). Update as pricing changes.
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  "google/gemini-2.5-pro-preview-06-05": { input: 1.25, output: 10.0 },
+  "google/gemini-2.0-flash-lite-001": { input: 0.075, output: 0.3 },
+  "voyage-3-large": { input: 0.06, output: 0.06 },
+  "voyage-code-3": { input: 0.06, output: 0.06 },
+  "rerank-2": { input: 0.05, output: 0.05 },
+};
+
+function estimateCost(
+  model: string,
+  inputTokens?: number,
+  outputTokens?: number,
+  totalTokens?: number
+): number | undefined {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) return undefined;
+
+  if (inputTokens != null && outputTokens != null) {
+    return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
+  }
+  if (totalTokens != null) {
+    return (totalTokens * pricing.input) / 1_000_000;
+  }
+  return undefined;
+}
+
 /**
  * Log AI API usage to prd_usage_logs. Fire-and-forget — never blocks the caller.
  */
@@ -53,13 +80,17 @@ export function logOpenRouterUsage(
   const usage = responseBody.usage as Record<string, number> | undefined;
   if (!usage) return;
 
+  const inputTokens = usage.prompt_tokens;
+  const outputTokens = usage.completion_tokens;
+
   logUsage({
     functionName,
     model,
     provider: 'openrouter',
-    inputTokens: usage.prompt_tokens,
-    outputTokens: usage.completion_tokens,
+    inputTokens,
+    outputTokens,
     totalTokens: usage.total_tokens,
+    estimatedCost: estimateCost(model, inputTokens, outputTokens),
     sessionId,
   });
 }
@@ -78,6 +109,7 @@ export function logVoyageUsage(
     model,
     provider: 'voyageai',
     totalTokens,
+    estimatedCost: estimateCost(model, undefined, undefined, totalTokens),
     sessionId,
   });
 }
