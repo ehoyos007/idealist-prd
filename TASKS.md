@@ -29,10 +29,19 @@
 (none)
 
 ## To Do
+- [ ] E2E test: PRD session → Go Deeper → vision session → Vision tab → ZIP export (requires mic)
 - [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
 - [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)
 - [ ] Test auto-save (start session, wait 60s, verify prd_sessions row created)
 - [ ] End-to-end test: voice session → PRD card → zip export (requires mic input)
+
+## Completed (Deploy — Session 18)
+- [x] Rename vision migration to avoid timestamp conflict (20260302→20260307)
+- [x] Push migration: `vision_md`, `eval_md`, `vision_transcript` columns added to `prd_projects`
+- [x] Deploy `synthesize-vision` edge function
+- [x] Redeploy 5 edge functions sharing updated `prompts.ts`
+- [x] Smoke test `synthesize-vision` API — HTTP 200, VISION.md (5 sections) + EVAL.md returned
+- [x] Commit + push to GitHub (`db1ee89`) — Vercel auto-redeploy
 
 ## Completed (Deployment + Testing — Session 16)
 - [x] Deploy "Connect GitHub Repo" feature: GITHUB_TOKEN, FHE_SUPABASE_URL, FHE_SUPABASE_KEY secrets set, migration pushed, edge function deployed

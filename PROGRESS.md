@@ -1,5 +1,25 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 18 — Vision System Deploy & Smoke Test)
+
+**Summary:** Deployed Vision System end-to-end — migration, 6 edge functions, API smoke test passed, committed and pushed to GitHub/Vercel.
+
+### What was done
+
+1. **Renamed migration** `20260302000000_vision_columns.sql` → `20260307000000_vision_columns.sql` (timestamp conflict with initial schema)
+2. **Pushed migration** via `supabase db push` — added `vision_md`, `eval_md`, `vision_transcript` columns to `prd_projects`
+3. **Deployed `synthesize-vision`** edge function (new) to Supabase
+4. **Redeployed 5 functions** sharing updated `prompts.ts`: `synthesize-project`, `fetch-github-repo`, `retrieve-context`, `chunk-and-index`, `parse-file-context`
+5. **API smoke test** — `synthesize-vision` returned HTTP 200 with full VISION.md (5 sections: Core Identity, Decision Framework, Constraint Architecture, Acceptance Criteria, Decomposition Patterns) + EVAL.md (checklist, interview questions, session log template)
+6. **Build verified** — zero errors
+7. **Committed and pushed** 15 files (+634/-37 lines) to GitHub main (`db1ee89`) — Vercel auto-redeploy triggered
+
+### What remains (manual, requires mic)
+- Full E2E: PRD session → Go Deeper → vision session → Vision tab → ZIP export
+- Test text chat, pause/resume, auto-save during voice sessions
+
+---
+
 ## Session: 2026-03-02 (Session 17 — Vision System Integration, Route C Two-Phase)
 
 **Summary:** Implemented full Vision System integration — voice-first vision coaching sessions that produce VISION.md + EVAL.md alongside existing PRD, with Go Deeper button, Vision tab, enhanced ZIP export, and session persistence.
