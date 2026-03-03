@@ -29,13 +29,19 @@
 (none)
 
 ## To Do
-- [ ] Deploy "Connect GitHub Repo" feature: set secrets (`GITHUB_TOKEN`, `FHE_SUPABASE_URL`, `FHE_SUPABASE_KEY`), push migration, deploy edge function
-- [ ] Test repo connect: public repo summary mode, deep indexing small repo, cross-project FHE query
-- [ ] Add estimated_cost calculation to `logOpenRouterUsage` (tokens recorded but cost is null)
 - [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
 - [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)
 - [ ] Test auto-save (start session, wait 60s, verify prd_sessions row created)
 - [ ] End-to-end test: voice session → PRD card → zip export (requires mic input)
+
+## Completed (Deployment + Testing — Session 16)
+- [x] Deploy "Connect GitHub Repo" feature: GITHUB_TOKEN, FHE_SUPABASE_URL, FHE_SUPABASE_KEY secrets set, migration pushed, edge function deployed
+- [x] Fix deep indexing: session_id NOT NULL constraint blocking repo chunk inserts (migration: allow_null_session_id)
+- [x] Test summary mode — sindresorhus/is: summary generated, 0 chunks, 15 files in tree
+- [x] Test deep indexing — sindresorhus/is: 9 files processed, 58 chunks with voyage-code-3 embeddings stored
+- [x] Test auto-classification — tj/commander.js: AI chose "deep" based on user context, 189 files, 282 chunks
+- [x] Add estimated_cost to usage logging — pricing map for Gemini Pro/Flash Lite/Voyage models, verified $0.0002 for Flash Lite call
+- [x] Redeploy all 5 edge functions with updated _shared/usage.ts
 
 ## Completed (E2E Testing — Session 14)
 - [x] Test sparse transcript handling — 22-word transcript → `[Needs Discussion]` in 5/9 PRD fields, scores C=1 I=3 U=2 Cf=4

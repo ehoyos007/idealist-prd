@@ -1,5 +1,47 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 16 — Deploy & Test GitHub Repo + Cost Logging)
+
+**Summary:** Deployed Connect GitHub Repo feature end-to-end, fixed deep indexing bug (session_id NOT NULL), tested all 3 modes (summary/deep/auto), added estimated_cost to usage logging.
+
+### What was done
+
+**Deployment (4 steps)**
+1. Set `GITHUB_TOKEN` secret (classic PAT with `public_repo` scope)
+2. Set `FHE_SUPABASE_URL` + `FHE_SUPABASE_KEY` secrets for cross-project index
+3. Pushed migration `20260306000000_add_repo_source.sql` — `source_type` + `repo_name` columns
+4. Deployed `fetch-github-repo` edge function with all shared modules
+
+**Bug fix — deep indexing failure**
+5. Root cause: `prd_document_chunks.session_id` was `NOT NULL` but repo chunks have no session
+6. Created migration `20260306100000_allow_null_session_id.sql` — `ALTER COLUMN session_id DROP NOT NULL`
+7. Deep indexing works after fix: 9 files → 58 chunks with voyage-code-3 embeddings
+
+**Testing (3 modes verified)**
+8. **Summary mode** (`sindresorhus/is`): AI-generated summary of tech stack/architecture, 0 chunks, 15-file tree
+9. **Deep indexing** (`sindresorhus/is`): 9 files processed, 58 chunks with embeddings, all stored with `source_type: "github_repo"` and `repo_name`
+10. **Auto-classification** (`tj/commander.js` + user context "build a CLI tool"): AI classified as "deep", 189 files processed, 282 chunks created
+11. Test data cleaned up after verification
+
+**Cost estimation**
+12. Added `MODEL_PRICING` map + `estimateCost()` to `_shared/usage.ts` covering Gemini Pro, Flash Lite, Voyage 3 Large, voyage-code-3, rerank-2
+13. Wired into `logOpenRouterUsage()` and `logVoyageUsage()`
+14. Verified: usage log now shows `estimated_cost: $0.000203` for Flash Lite call (was null before)
+15. Redeployed all 5 edge functions that use the shared usage module
+
+### Build verification
+- `tsc --noEmit` — 0 errors
+- All 5 edge functions deployed clean
+
+### What remains (all require mic input)
+- Test text chat during voice session
+- Test pause/resume flow
+- Test auto-save (60s interval)
+- Full E2E: voice → PRD card → zip export
+- Remix voice session
+
+---
+
 ## Session: 2026-03-02 (Session 15 — Connect GitHub Repo Feature)
 
 **Summary:** Implemented full "Connect GitHub Repo" feature — edge function, shared modules, frontend components, and database migration. Users can now connect a GitHub repo during brainstorming for AI-aware codebase context.
