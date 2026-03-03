@@ -12,18 +12,15 @@ serve(async (req) => {
       throw new Error("Missing Supabase config");
     }
 
-    // Get the user's JWT from Authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return errorResponse("Missing Authorization header", 401);
     }
 
-    // Create a client with the user's JWT to get their identity
-    const userClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: { user }, error: userError } = await userClient.auth.getUser(
+    // Get user from JWT
+    const { data: { user }, error: userError } = await serviceClient.auth.getUser(
       authHeader.replace("Bearer ", "")
     );
 
@@ -32,25 +29,63 @@ serve(async (req) => {
     }
 
     const githubUsername = user.user_metadata?.user_name;
+    const avatarUrl = user.user_metadata?.avatar_url;
+    const displayName = user.user_metadata?.full_name || githubUsername;
+
     if (!githubUsername) {
       return errorResponse("No GitHub username found in user metadata", 400);
     }
 
-    // Use service role to check allowlist (RLS blocks client access)
-    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Parse optional provider token from request body
+    let providerToken: string | null = null;
+    try {
+      const body = await req.json();
+      providerToken = body?.providerToken || null;
+    } catch {
+      // No body — that's fine
+    }
 
-    const { data, error } = await serviceClient
+    // 1. Check allowlist
+    const { data: allowlistEntry, error: allowError } = await serviceClient
       .from("idealist_allowed_users")
       .select("id")
       .eq("github_username", githubUsername)
       .maybeSingle();
 
-    if (error) {
-      console.error("Allowlist check error:", error.message);
+    if (allowError) {
+      console.error("Allowlist check error:", allowError.message);
       return errorResponse("Failed to check allowlist", 500);
     }
 
-    return jsonResponse({ allowed: !!data });
+    const allowed = !!allowlistEntry;
+
+    // 2. Upsert profile (even if not allowed, so we have the record)
+    const profileData: Record<string, unknown> = {
+      id: user.id,
+      github_username: githubUsername,
+      github_avatar_url: avatarUrl,
+      display_name: displayName,
+    };
+
+    if (providerToken) {
+      profileData.github_access_token = providerToken;
+    }
+
+    const { data: profile, error: profileError } = await serviceClient
+      .from("idealist_profiles")
+      .upsert(profileData, { onConflict: "id" })
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error("Profile upsert error:", profileError.message);
+      // Non-fatal — still return allowlist result
+    }
+
+    return jsonResponse({
+      allowed,
+      profile: profile || null,
+    });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("check-allowlist error:", msg);

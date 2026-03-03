@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeFunction } from '@/lib/supabaseHelpers';
-import type { User, Session } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 
 export interface IdealistProfile {
   id: string;
@@ -14,73 +14,50 @@ export interface IdealistProfile {
   updated_at: string;
 }
 
+interface AuthCheckResponse {
+  allowed: boolean;
+  profile: IdealistProfile | null;
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<IdealistProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
 
-  // Fetch or create profile from idealist_profiles
-  const syncProfile = useCallback(async (authUser: User, session: Session | null) => {
-    const githubUsername = authUser.user_metadata?.user_name;
-    const avatarUrl = authUser.user_metadata?.avatar_url;
-    const displayName = authUser.user_metadata?.full_name || githubUsername;
+  // Single edge function call that handles both allowlist check AND profile sync
+  const syncAuthState = useCallback(async (providerToken?: string | null) => {
+    try {
+      const { data, error } = await invokeFunction<AuthCheckResponse>('check-allowlist', {
+        ...(providerToken ? { providerToken } : {}),
+      });
 
-    // Capture provider_token — only available on initial sign-in
-    const providerToken = session?.provider_token || null;
-
-    // Upsert the profile
-    const profileData: Record<string, unknown> = {
-      id: authUser.id,
-      github_username: githubUsername,
-      github_avatar_url: avatarUrl,
-      display_name: displayName,
-    };
-
-    // Only update the token if we have a fresh one (it's only available once)
-    if (providerToken) {
-      profileData.github_access_token = providerToken;
-    }
-
-    const { data, error } = await supabase
-      .from('idealist_profiles')
-      .upsert(profileData, { onConflict: 'id' })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Profile sync error:', error.message);
-      // Try to fetch existing profile if upsert failed
-      const { data: existing } = await supabase
-        .from('idealist_profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-      if (existing) {
-        setProfile(existing as IdealistProfile);
+      if (error) {
+        console.error('Auth check failed:', error.message);
+        setIsAllowed(false);
+        return;
       }
-    } else {
-      setProfile(data as IdealistProfile);
-    }
-  }, []);
 
-  // Check if user is on the allowlist
-  const checkAllowlist = useCallback(async () => {
-    const { data } = await invokeFunction<{ allowed: boolean }>('check-allowlist', {});
-    setIsAllowed(data?.allowed ?? false);
+      setIsAllowed(data?.allowed ?? false);
+      if (data?.profile) {
+        setProfile(data.profile);
+      }
+    } catch (err) {
+      console.error('Auth check error:', err);
+      setIsAllowed(false);
+    }
   }, []);
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const authUser = session?.user ?? null;
       setUser(authUser);
 
-      if (authUser && session) {
-        syncProfile(authUser, session).then(() => checkAllowlist()).finally(() => setIsLoading(false));
-      } else {
-        setIsLoading(false);
+      if (authUser) {
+        await syncAuthState(session?.provider_token);
       }
+      setIsLoading(false);
     });
 
     // Listen for auth changes
@@ -89,10 +66,9 @@ export function useAuth() {
         const authUser = session?.user ?? null;
         setUser(authUser);
 
-        if (event === 'SIGNED_IN' && authUser && session) {
+        if (event === 'SIGNED_IN' && authUser) {
           // Critical: capture provider_token on SIGNED_IN (only available once)
-          await syncProfile(authUser, session);
-          await checkAllowlist();
+          await syncAuthState(session?.provider_token);
           setIsLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
@@ -103,7 +79,7 @@ export function useAuth() {
     );
 
     return () => subscription.unsubscribe();
-  }, [syncProfile, checkAllowlist]);
+  }, [syncAuthState]);
 
   const signInWithGitHub = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -124,18 +100,16 @@ export function useAuth() {
 
   const updateProfile = useCallback(async (updates: Partial<Pick<IdealistProfile, 'supabase_management_token'>>) => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from('idealist_profiles')
-      .update(updates)
-      .eq('id', user.id)
-      .select()
-      .single();
+    // Use edge function to update profile since PostgREST may not see the table
+    const { data, error } = await invokeFunction<{ profile: IdealistProfile }>('update-profile', updates);
 
     if (error) {
       console.error('Profile update error:', error.message);
       throw error;
     }
-    setProfile(data as IdealistProfile);
+    if (data?.profile) {
+      setProfile(data.profile);
+    }
   }, [user]);
 
   return {

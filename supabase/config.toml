@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.fetch-supabase-schema]
 verify_jwt = false
+
+[functions.update-profile]
+verify_jwt = false
