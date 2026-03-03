@@ -29,6 +29,8 @@
 (none)
 
 ## To Do
+- [ ] Deploy "Connect GitHub Repo" feature: set secrets (`GITHUB_TOKEN`, `FHE_SUPABASE_URL`, `FHE_SUPABASE_KEY`), push migration, deploy edge function
+- [ ] Test repo connect: public repo summary mode, deep indexing small repo, cross-project FHE query
 - [ ] Add estimated_cost calculation to `logOpenRouterUsage` (tokens recorded but cost is null)
 - [ ] Test text chat input during voice session (type message → appears with "typed" badge → AI acknowledges)
 - [ ] Test pause/resume flow (start → speak → Pause → verify draft in library → Resume → continue → End & Generate)

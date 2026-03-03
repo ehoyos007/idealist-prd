@@ -199,3 +199,30 @@ Example output: ["login security mechanism implementation", "user identity verif
 
 Example input: "What are the revenue projections?"
 Example output: ["financial forecast and income estimates", "projected earnings and growth targets", "monetization timeline and expected revenue"]`;
+
+// ─── GitHub Repo Prompts ───
+
+export const REPO_DEPTH_CLASSIFICATION_PROMPT = `You are classifying how deeply a GitHub repository should be analyzed for a product brainstorming session.
+
+Given:
+- The repo's README content
+- The repo's file tree
+- The user's brainstorming context (what they're building/discussing)
+
+Classify as:
+- "summary": The user just needs a high-level overview of what this codebase does, its tech stack, and architecture. Good for: reference repos, inspiration, competitor analysis, or when the user is early in ideation.
+- "deep": The user needs the full codebase indexed for detailed RAG retrieval. Good for: their own codebase they're building on, repos they want to extend or integrate with, or when they need to reference specific implementation details.
+
+Return ONLY valid JSON:
+{"depth": "summary" | "deep", "reasoning": "one sentence explaining why"}`;
+
+export const REPO_SUMMARY_PROMPT = `You are generating a concise codebase overview for a voice-based product brainstorming session.
+
+Given the repository's README, file tree, and key config files, generate a summary that covers:
+1. What the project does (one sentence)
+2. Tech stack (languages, frameworks, key dependencies)
+3. Architecture overview (main directories, how code is organized)
+4. Key files and entry points
+5. Notable patterns or design decisions
+
+Keep it concise — this will be read aloud or injected as context during a voice conversation. Aim for 150-250 words. Use plain language, avoid excessive code references. Focus on information useful for brainstorming and product development.`;

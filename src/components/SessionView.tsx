@@ -4,10 +4,11 @@ import { VoiceOrb } from './VoiceOrb';
 import { ConversationView } from './ConversationView';
 import { ChatInput } from './ChatInput';
 import { FileUploadButton, processFile } from './FileUploadButton';
+import { RepoConnectButton } from './RepoConnectButton';
 import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { useSessionPersistence } from '@/hooks/useSessionPersistence';
 import { invokeFunction } from '@/lib/supabaseHelpers';
-import { ProjectCard, UploadedFile } from '@/types/project';
+import { ProjectCard, UploadedFile, ConnectedRepo } from '@/types/project';
 import { Mic, Square, Loader2, Sparkles, Upload, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,7 @@ export function SessionView({
     getTranscript,
     toggleMute,
     sendFileContext,
+    sendRepoContext,
     sendTextMessage,
   } = useElevenLabsConversation();
 
@@ -120,6 +122,14 @@ export function SessionView({
         console.error('Error chunking file:', err);
       }
     }
+  };
+
+  const handleRepoConnected = (repo: ConnectedRepo) => {
+    sendRepoContext(repo);
+    toast({
+      title: 'Repository connected',
+      description: `${repo.repoName} — ${repo.resolvedDepth === 'deep' ? `${repo.chunksCreated} chunks indexed` : 'summary generated'}`,
+    });
   };
 
   const handleDragOver = useCallback(
@@ -381,6 +391,11 @@ export function SessionView({
           {status === 'connected' && (
             <>
               <FileUploadButton onFileProcessed={handleFileUploadProcessed} disabled={false} />
+              <RepoConnectButton
+                onRepoConnected={handleRepoConnected}
+                sessionId={sessionId}
+                disabled={false}
+              />
               <Button onClick={handlePause} variant="outline" className="font-mono text-sm">
                 <Pause className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Pause</span>

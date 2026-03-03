@@ -1,5 +1,44 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-02 (Session 15 — Connect GitHub Repo Feature)
+
+**Summary:** Implemented full "Connect GitHub Repo" feature — edge function, shared modules, frontend components, and database migration. Users can now connect a GitHub repo during brainstorming for AI-aware codebase context.
+
+### What was done
+
+**Backend (5 new files)**
+1. **Database migration** (`20260306000000_add_repo_source.sql`): Added `source_type` (file|github_repo) and `repo_name` columns to `prd_document_chunks` + `prd_project_documents`, with partial index on `repo_name`
+2. **Voyage code module** (`_shared/voyage-code.ts`): Deno-adapted `voyage-code-3` embeddings (1024-dim) with `embedCode()`, `embedQuery()`, `rerankDocuments()` — separate from existing `voyage-3-large` document embeddings
+3. **Code chunker** (`_shared/code-chunker.ts`): File-level + function/class extraction for TS/JS (regex + brace-depth), Python (indentation), Rust, Go. Filters out node_modules, lock files, .d.ts, etc.
+4. **Repo prompts** (added to `_shared/prompts.ts`): `REPO_DEPTH_CLASSIFICATION_PROMPT` (summary vs deep) and `REPO_SUMMARY_PROMPT` (voice-friendly codebase overview)
+5. **Edge function** (`fetch-github-repo/index.ts`): Parses owner/repo from shorthand or URL, checks FHE Supabase for pre-indexed repos, fetches tree via GitHub API, auto-classifies depth via Gemini Flash, generates summary or does full deep indexing (chunk + embed + store in `prd_document_chunks`)
+
+**Frontend (4 modified + 1 new)**
+6. **Types** (`project.ts`): Added `ConnectedRepo`, `RepoDepth`, `RepoFetchResult` types; extended `ConversationMessage` with `connectedRepo` field
+7. **RepoConnectButton** (new component): Dialog with repo URL input, depth selector (Auto/Summary/Deep), optional context textarea, progress states (fetching→analyzing→indexing→ready)
+8. **Hook** (`useElevenLabsConversation.ts`): Added `sendRepoContext()` — adds message + injects summary via `sendContextualUpdate`; also updated `getTranscript()` to include repo info
+9. **SessionView**: Integrated `RepoConnectButton` next to `FileUploadButton` with `handleRepoConnected` handler
+10. **ConversationView**: Added GitHub icon + repo name badge + depth tag + file count rendering for repo messages
+
+### Architecture: Hybrid Query + Index
+- If a repo is already indexed in FHE's Supabase → query `match_code_embeddings` directly (zero re-indexing)
+- If not → index fresh using adapted FHE pipeline (voyage-code-3 embeddings stored in Idealist's `prd_document_chunks`)
+- Auto-classifies depth (summary vs deep) using Gemini Flash based on README + tree + user context
+
+### Build verification
+- `tsc --noEmit` — 0 errors
+- `vite build` — clean (2191 modules, 4.58s)
+
+### What remains for deployment
+- Set Supabase secrets: `GITHUB_TOKEN`, `FHE_SUPABASE_URL`, `FHE_SUPABASE_KEY`
+- Run `supabase db push` for new migration
+- Deploy edge function: `supabase functions deploy fetch-github-repo`
+- Test with public repo (e.g. `facebook/react`) in summary mode
+- Test deep indexing with a small repo
+- Test cross-project query with a repo already indexed in FHE
+
+---
+
 ## Session: 2026-03-02 (Session 14 — E2E Testing)
 
 **Summary:** Ran comprehensive E2E test suite for Session 12/13 features — sparse transcript handling, scoring rubric calibration, usage logging, and browser UI verification. All tests pass.

@@ -3,6 +3,7 @@ import { useConversation } from '@elevenlabs/react';
 import { invokeFunction } from '@/lib/supabaseHelpers';
 import {
   ConversationMessage,
+  ConnectedRepo,
   ProjectCard,
   UploadedFile,
   DocumentChunk,
@@ -351,6 +352,12 @@ export function useElevenLabsConversation() {
             content += `\n[File content: ${m.attachedFile.content}]`;
           }
         }
+        if (m.connectedRepo) {
+          content += `\n[Connected repo: ${m.connectedRepo.repoName}]`;
+          if (m.connectedRepo.summary) {
+            content += `\n[Repo summary: ${m.connectedRepo.summary}]`;
+          }
+        }
         return content;
       })
       .join('\n\n');
@@ -388,6 +395,32 @@ export function useElevenLabsConversation() {
       return true;
     },
     [conversation, retrieveAndInjectContext]
+  );
+
+  const sendRepoContext = useCallback(
+    (repo: ConnectedRepo) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'user',
+          content: `Connected GitHub repo: ${repo.repoName}`,
+          timestamp: new Date(),
+          connectedRepo: repo,
+        },
+      ]);
+
+      if (repo.summary) {
+        try {
+          conversation.sendContextualUpdate(
+            `[GITHUB REPOSITORY CONNECTED: ${repo.repoName}]\n\nThe user has connected their GitHub repository for additional context:\n\n${repo.summary}\n\n[END REPO CONTEXT - Reference this codebase context when discussing technical decisions, architecture, and implementation.]`
+          );
+          console.log('Repo context sent via sendContextualUpdate');
+        } catch (err) {
+          console.warn('Could not send repo context to stream:', err);
+        }
+      }
+    },
+    [conversation]
   );
 
   // B1: Send a text message during voice session
@@ -438,6 +471,7 @@ export function useElevenLabsConversation() {
     getTranscript,
     toggleMute,
     sendFileContext,
+    sendRepoContext,
     sendTextMessage,
     getSessionId,
   };

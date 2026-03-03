@@ -65,6 +65,31 @@ export interface RetrievedContext {
   timestamp: Date;
 }
 
+export type RepoDepth = 'auto' | 'summary' | 'deep';
+
+export interface ConnectedRepo {
+  repoName: string;        // "owner/repo"
+  repoUrl: string;         // full GitHub URL
+  status: 'fetching' | 'analyzing' | 'indexing' | 'ready' | 'error';
+  depth: RepoDepth;
+  resolvedDepth?: 'summary' | 'deep';
+  summary?: string;
+  filesProcessed?: number;
+  chunksCreated?: number;
+  tree?: string[];          // file paths
+  error?: string;
+}
+
+export interface RepoFetchResult {
+  success: boolean;
+  summary: string;
+  filesProcessed: number;
+  chunksCreated: number;
+  tree: string[];
+  resolvedDepth: 'summary' | 'deep';
+  error?: string;
+}
+
 export interface ConversationMessage {
   role: 'user' | 'assistant' | 'context';
   content: string;
@@ -72,4 +97,5 @@ export interface ConversationMessage {
   source?: 'voice' | 'text';
   attachedFile?: UploadedFile;
   retrievedContext?: RetrievedContext;
+  connectedRepo?: ConnectedRepo;
 }

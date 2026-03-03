@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ConversationMessage } from '@/types/project';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { FileIcon, Database, ChevronDown, ChevronUp, Keyboard } from 'lucide-react';
+import { FileIcon, Database, ChevronDown, ChevronUp, Keyboard, Github } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ConversationViewProps {
@@ -136,6 +136,21 @@ export function ConversationView({ messages }: ConversationViewProps) {
                   <span className="text-xs text-muted-foreground flex-shrink-0">
                     ({formatFileSize(message.attachedFile.size)})
                   </span>
+                </div>
+              )}
+
+              {message.connectedRepo && (
+                <div className="flex items-center gap-2 mt-3 p-2 bg-muted/50 border border-border rounded max-w-full overflow-hidden">
+                  <Github className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm font-mono truncate">{message.connectedRepo.repoName}</span>
+                  <Badge variant="outline" className="text-xs font-mono py-0 px-1.5 flex-shrink-0">
+                    {message.connectedRepo.resolvedDepth || message.connectedRepo.depth}
+                  </Badge>
+                  {message.connectedRepo.filesProcessed !== undefined && message.connectedRepo.filesProcessed > 0 && (
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {message.connectedRepo.filesProcessed} files
+                    </span>
+                  )}
                 </div>
               )}
             </div>
