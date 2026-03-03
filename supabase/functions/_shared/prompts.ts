@@ -173,39 +173,92 @@ You will receive a transcript of a voice conversation where a builder discussed 
 
 ## VISION.md Structure (target: ~150 lines max)
 
-### 1. Core Identity
-- One-paragraph project essence: what it is, who it's for, and the single most important outcome.
+### 1. Core Identity (~3 labeled lines)
+Use this exact format:
+
+**Purpose:** [The single most important thing this project does]
+
+**Target User:** [Specific, not generic — who exactly is this for?]
+
+**Experience Goal:** [How it should feel to use. Not metrics — the visceral feeling of "this is working."]
 
 ### 2. Decision Framework
-- The principles and tiebreakers the builder will use when priorities conflict.
-- Specific trade-off rules (e.g., "ship speed over polish for v1", "never compromise data accuracy").
+- Trade-off principles written as "X over Y" statements with one sentence explaining when and why.
+- The tiebreakers the builder will use when priorities conflict.
+- Specific trade-off rules (e.g., "Speed over polish for v1", "Never compromise data accuracy").
+- End with: **When in doubt:** [Default tiebreaker. One sentence.]
 
 ### 3. Constraint Architecture
-- Hard boundaries: time box, budget, tech debt limits, scope exclusions.
-- What "out of scope for v1" means concretely.
+Use these four subsections:
+- **Musts:** Things that must always be true, no exceptions.
+- **Must-Nots:** Failure modes to actively prevent.
+- **Preferences:** Default choices when multiple valid approaches exist.
+- **Escalation Triggers:** Decisions the AI should never make alone.
 
 ### 4. Acceptance Criteria
-- For each key feature or milestone, the concrete definition of "done."
-- Observable behaviors, metrics, or user outcomes that prove it shipped.
+Use two subsections:
+- **"Done" means:** Observable behaviors or conditions that prove a feature shipped.
+- **"Right" means (beyond "done"):** Quality bars that separate "technically works" from "matches the vision."
 
 ### 5. Decomposition Patterns
-- How the builder will break work into shippable units.
-- Ordering principles, dependency chains, what ships independently vs. together.
+- **Task size:** How big should a single task be?
+- **Build order:** What gets built first? What depends on what?
+- **Integration approach:** Incremental or big-bang?
+- **Testing:** What gets tested and how?
+
+### Footer
+End every VISION.md with:
+- **Last updated:** [DATE]
+- **Vision maturity:** Draft
+- **Next review:** After 10 build sessions
 
 ## EVAL.md Structure
 
 ### How to Run
 - Step-by-step instructions for running an eval session against this project.
+- Cadence: Every ~10 development sessions, or biweekly — whichever comes first.
 
-### Eval Process Checklist
-- A checklist of items to verify during each eval cycle (does the feature meet acceptance criteria, are constraints respected, etc.).
+### Eval Process Checklist (9 steps)
+Generate a checklist with these 9 numbered sections:
+1. **Review PROGRESS.md** — Read last 10 session entries, extract all Vision Decisions sections.
+2. **Audit Vision Decisions** — Was the confidence tier correct? Did VISION.md support the decision?
+3. **Constraint Verification** — All musts satisfied, no must-nots violated, preferences followed, escalation triggers not bypassed.
+4. **Decision Framework Alignment** — Recent decisions align with trade-off principles, no scope creep.
+5. **Acceptance Criteria Check** — "Done" and "Right" criteria met for completed work, no regressions.
+6. **Decomposition Quality** — Tasks appropriately sized, build order followed, integration approach maintained.
+7. **CLAUDE.md Subsection Scoring** — Score each of 6 subsections as Active (fired and useful), Passive (rarely fired), or Zero (never fired). Zero-score subsections after the test period get cut.
+8. **Intent Resolution Assessment** — Is the intent resolution gap shrinking or growing? Are interruptions decreasing? Is first-pass accuracy improving?
+9. **Update Documents** — Update VISION.md based on findings, record in Alignment Records.
+
+### CLAUDE.md Subsection Scorecard
+Include this table:
+| Subsection | Times Fired | Correct Guidance | Caught Misses | Score |
+|---|---|---|---|---|
+| Confidence tiers | — | — | — | — |
+| File routing | — | — | — | — |
+| Constraint enforcement | — | — | — | — |
+| Vision evolution | — | — | — | — |
+| Context evolution | — | — | — | — |
+| Quality verification | — | — | — | — |
+
+Score key: Active (fired and useful) | Passive (exists but rarely fired) | Zero (never fired)
+
+### Eval Decision
+After each eval, include these checkboxes:
+- [ ] VISION.md is working well — no changes needed
+- [ ] VISION.md updated — [what changed and why]
+- [ ] CLAUDE.md snippet updated — [what changed and why]
+- [ ] System needs rethinking — [what's not working]
 
 ### Interview Calibration
-- Questions to ask during a review session to probe whether the vision is being followed.
-- Calibrated to the specific project's decision framework and constraints.
+Based on THIS vision coaching session, populate:
+- **High-Signal Questions:** Questions that surfaced non-obvious, decision-shaping information.
+- **Low-Signal Questions:** Questions where the answer was obvious from the PRD or brain dump.
+- **Recommended Quick-Pass Set:** [Leave as "Populate after first eval" for now.]
 
-### Eval Session Log
-- A blank template section for recording eval session results.
+### Alignment Records
+- Add a section header for recording eval session results, newest first.
+- Include a template entry with: date, sessions since last eval, overall alignment (Strong/Moderate/Weak), findings, VISION.md updates made, action items.
 
 ## Guidelines
 - If the conversation lacks detail for a section, write "[Needs Discussion]" rather than inventing content.

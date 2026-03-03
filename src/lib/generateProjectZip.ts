@@ -127,30 +127,77 @@ ${project.architecture}
 
 ## Vision-Guided Development
 
-### Confidence Tiers
-- **High confidence**: Proceed without asking. Matches established patterns, clear requirements.
-- **Medium confidence**: Proceed but flag. Note deviation in commit message or comment.
-- **Low confidence**: Stop and ask. Ambiguous requirements, architectural decisions, constraint conflicts.
+This project uses VISION.md for autonomous decision-making and EVAL.md for periodic evaluation.
 
-### Constraint Enforcement
-Before implementing any feature or making a change:
-1. Check VISION.md constraints (musts and must-nots)
-2. Verify alignment with the decision framework
-3. Confirm acceptance criteria are met before marking done
+### Session Startup
 
-### Precedence Hierarchy
-1. VISION.md constraints (highest priority)
-2. CLAUDE.md conventions
-3. PLAN.md implementation details
-4. TASKS.md task descriptions
-5. CONTEXT.md background (lowest priority)
+On session start:
+1. Read VISION.md
+2. Read PROGRESS.md
+3. Output one-line confirmation: "Vision loaded: [top 2-3 decision defaults]. [N] open questions."
+4. If a vision evolution trigger was hit last session, append: "Vision review suggested."
+5. Check TASKS.md or PLAN.md for next steps
 
-### Session Wrap-Up Format
-When ending a session, update PROGRESS.md with:
-- What was completed
-- Decisions made and their rationale (referencing VISION.md)
-- Any constraint conflicts encountered
-- What to tackle next`;
+### 1. Confidence-Based Decision Making
+
+When you encounter an ambiguous decision:
+
+1. Check VISION.md first — Decision Framework, Constraint Architecture, or Acceptance Criteria.
+2. Assess confidence:
+   - **High** (VISION.md clearly covers this): Proceed. Note the decision briefly.
+   - **Medium** (partially covered, needs inference): Proceed but flag. "Based on VISION.md's preference for [X], I went with [Y]. Adjust?"
+   - **Low** (not covered, or significant implications): Stop and ask. Novel decisions -> mention for Open Questions in VISION.md.
+
+### 2. File Routing
+
+- Judgment calls (style, approach, priority, tradeoff) -> **VISION.md**
+- Factual info (APIs, formats, stack, business rules) -> **CONTEXT.md**
+- Implementation details (module boundaries, specs) -> **PLAN.md**
+- Unsure -> VISION.md first, then CONTEXT.md
+
+### 3. Constraint Enforcement
+
+Before completing any task:
+1. Verify all Musts are satisfied
+2. Verify no Must-Nots are violated
+3. Check Escalation Triggers — if any apply, stop and ask
+4. For choices between valid approaches, follow stated Preferences
+
+### 4. Vision Evolution Triggers
+
+Prompt to update VISION.md when:
+- First major feature ships
+- A decision contradicts VISION.md
+- A cluster of similar low-confidence questions appears
+- Natural milestones (v0.1, MVP, launch)
+- User says "this isn't feeling right"
+
+### 5. Context Evolution Triggers
+
+Prompt to update CONTEXT.md when:
+- New integrations or dependencies added
+- Tech stack changes
+- Domain knowledge gaps caused errors
+- New reference documents created
+
+### 6. Quality Verification
+
+Before marking significant work complete:
+1. Check Acceptance Criteria in VISION.md
+2. Verify Musts from Constraint Architecture
+Fix failures before presenting. If unfixable, flag specifically which criteria aren't met.
+
+### Precedence
+
+When files disagree: **Live instruction > CLAUDE.md > VISION.md > CONTEXT.md**
+
+Most apparent conflicts between VISION.md and CONTEXT.md are complementary tensions requiring synthesis, not true contradictions. Only true contradictions trigger the precedence hierarchy.
+
+### Session Wrap-Up Addition
+
+Every PROGRESS.md wrap-up includes a Vision Decisions section:
+- **[High/Med/Low]:** [Decision] — [VISION.md section referenced]
+Or: "None this session."`;
   }
 
   content += `
