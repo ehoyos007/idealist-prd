@@ -2,6 +2,12 @@
 
 ## Clu Session: 2026-03-12
 
+**Summary:** Fix broken build — remove lovable-tagger from vite.config.ts, run npm install, verify clean build (2205 modules)
+
+---
+
+## Clu Session: 2026-03-12
+
 **Summary:** Add clu-update.sh commit workflow + prepare-commit-msg hook for automated session logging
 
 ---
