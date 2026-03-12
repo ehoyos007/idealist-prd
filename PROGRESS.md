@@ -1,5 +1,11 @@
 # Idealist PRD - Progress Log
 
+## Clu Session: 2026-03-12
+
+**Summary:** Add clu-update.sh commit workflow + prepare-commit-msg hook for automated session logging
+
+---
+
 ## Session: 2026-03-03 (Session 19 — GitHub OAuth, Repo Dropdown, Supabase Deep Context, Settings)
 
 **Summary:** Added GitHub OAuth login with allowlist+invite system, searchable repo dropdown, Supabase Management API deep context integration, and a 3-tab Settings page. All auth operations routed through edge functions to bypass PostgREST schema cache issues.
