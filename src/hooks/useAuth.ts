@@ -49,13 +49,16 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    // Safety timeout — never stay on loading screen for more than 8 seconds
+    // Safety timeout — never stay on any loading/spinner screen forever.
+    // getSession() can take 5s+ during token refresh, so give it 12s total.
     const timeout = setTimeout(() => {
       if (!authCheckDone.current) {
-        console.warn('Auth check timed out — showing login');
+        console.warn('Auth check timed out — forcing resolution');
+        setIsAllowed((current) => current === null ? false : current);
         setIsLoading(false);
+        authCheckDone.current = true;
       }
-    }, 8000);
+    }, 12000);
 
     const initAuth = async () => {
       try {

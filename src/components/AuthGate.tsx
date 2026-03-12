@@ -13,8 +13,8 @@ interface AuthGateProps {
 }
 
 export function AuthGate({ user, isLoading, isAllowed, onSignIn, onSignOut, children }: AuthGateProps) {
-  // Loading state
-  if (isLoading) {
+  // Loading state — covers both initial load and allowlist check in progress
+  if (isLoading || (user && isAllowed === null)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -62,15 +62,6 @@ export function AuthGate({ user, isLoading, isAllowed, onSignIn, onSignOut, chil
             Sign out
           </Button>
         </div>
-      </div>
-    );
-  }
-
-  // Allowed — still checking
-  if (isAllowed === null) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
