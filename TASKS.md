@@ -26,7 +26,7 @@
 - [x] Build passes clean (0 TS errors, 2160 modules)
 
 ## In Progress
-(none)
+- [ ] Deploy bug fixes to production + have Daniel retest
 
 ## To Do
 - [ ] E2E test: PRD session → Go Deeper → vision session → Vision tab → ZIP export (requires mic)
@@ -121,7 +121,17 @@
 - [x] Insert recovered project into `prd_projects` DB
 - [x] Clean up: removed `recover-transcript` function directory, config entry, and deleted from Supabase remote
 
-## Bugs Fixed
+## Bugs Fixed (Session: 2026-03-13 — Deep Debug Dive)
+- [x] **Mute was cosmetic-only** — Added `micMuted: isMuted` controlled state to `useConversation()` so mic actually mutes
+- [x] **Text messages ignored by AI** — Replaced `sendContextualUpdate` with `sendUserMessage` for typed messages
+- [x] **Silent WebSocket disconnect** — Added intentional disconnect tracking, error messaging, and `reconnect()` with transcript re-injection
+- [x] **Stale auto-save closure** — Used `messagesRef` instead of stale `messages` closure in auto-save interval
+- [x] **RAG fires without documents** — Added `hasDocumentsRef` guard so RAG only triggers when files/repos are uploaded
+- [x] **Resume race condition** — Set `status: 'connecting'` before async token fetch in `resumeConversation`
+- [x] **Duplicate isSpeaking state** — Use SDK's `conversation.isSpeaking` directly instead of manual sync
+- [x] **VoiceOrb jitter** — Replaced `Math.random()` in render with fixed bar heights
+
+## Bugs Fixed (Earlier)
 - [x] **Realtime sync not working** — Fixed by setting `REPLICA IDENTITY FULL` on `prd_projects` table. Migration `20260303100000_fix_realtime_replication.sql` pushed. Verified working via test script (INSERT events delivered in <1s).
 
 ## Manual Tests Needed (require mic input)

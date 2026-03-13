@@ -84,15 +84,15 @@ export function VoiceOrb({
               )}
             />
             
-            {/* Speaking indicator bars */}
+            {/* Speaking indicator bars — fixed heights to avoid jitter from re-renders */}
             {isSpeaking && (
               <div className="absolute inset-0 flex items-center justify-center gap-1">
-                {[...Array(3)].map((_, i) => (
+                {[24, 36, 28].map((height, i) => (
                   <div
                     key={i}
                     className="w-1 bg-primary animate-pulse"
                     style={{
-                      height: `${20 + Math.random() * 20}px`,
+                      height: `${height}px`,
                       animationDelay: `${i * 0.15}s`,
                       animationDuration: '0.5s'
                     }}

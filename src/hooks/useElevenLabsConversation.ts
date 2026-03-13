@@ -10,7 +10,9 @@ import {
   RetrievedContext,
 } from '@/types/project';
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
+const MAX_RECONNECT_ATTEMPTS = 2;
 
 // Reference copy of voice agent prompt (canonical version lives in _shared/prompts.ts)
 const SYSTEM_PROMPT_NEW = `You are an enthusiastic product coach and PRD brainstorming partner named Idealist.
@@ -94,7 +96,6 @@ After covering all 4 areas, tell the user they can end the session.`;
 
 export function useElevenLabsConversation() {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [isSpeakingState, setIsSpeakingState] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -102,12 +103,28 @@ export function useElevenLabsConversation() {
   const [isResuming, setIsResuming] = useState(false);
 
   const sessionIdRef = useRef<string | null>(null);
+  const projectIdRef = useRef<string | null>(null);
+  const hasDocumentsRef = useRef(false);
+  const messagesRef = useRef<ConversationMessage[]>([]);
+  const intentionalDisconnectRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+
+  // Keep messagesRef in sync with state for use in callbacks/closures
+  const updateMessages = useCallback((updater: ConversationMessage[] | ((prev: ConversationMessage[]) => ConversationMessage[])) => {
+    setMessages((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      messagesRef.current = next;
+      return next;
+    });
+  }, []);
+
   const sendContextualUpdateRef = useRef<((text: string) => void) | null>(null);
 
-  const projectIdRef = useRef<string | null>(null);
-
+  // Bug 5: Only fire RAG when documents have actually been uploaded
   const retrieveAndInjectContext = useCallback(
     async (query: string, currentSessionId: string) => {
+      if (!hasDocumentsRef.current) return;
+
       try {
         console.log(
           'Retrieving context for query:',
@@ -142,7 +159,7 @@ export function useElevenLabsConversation() {
           timestamp: new Date(),
         };
 
-        setMessages((prev) => [
+        updateMessages((prev) => [
           ...prev,
           {
             role: 'context',
@@ -174,13 +191,16 @@ export function useElevenLabsConversation() {
         console.error('Error in RAG retrieval:', err);
       }
     },
-    []
+    [updateMessages]
   );
 
+  // Bug 1: Pass micMuted as controlled state so mute actually works
+  // Bug 7: Use conversation.isSpeaking directly instead of manual state
   const conversation = useConversation({
+    micMuted: isMuted,
     onMessage: (payload) => {
       const role = payload.role === 'user' ? 'user' : 'assistant';
-      setMessages((prev) => [
+      updateMessages((prev) => [
         ...prev,
         {
           role,
@@ -197,37 +217,105 @@ export function useElevenLabsConversation() {
         retrieveAndInjectContext(payload.message, sessionIdRef.current);
       }
     },
-    onModeChange: ({ mode }) => {
-      setIsSpeakingState(mode === 'speaking');
-    },
     onConnect: () => {
       console.log('ElevenLabs conversation connected');
       setStatus('connected');
+      reconnectAttemptsRef.current = 0;
     },
+    // Bug 3: Distinguish intentional vs unexpected disconnects
     onDisconnect: (details) => {
       console.log('ElevenLabs conversation disconnected:', details.reason);
-      if (details.reason === 'error') {
-        setError(details.message || 'Connection lost');
-        setStatus('error');
-      } else {
+
+      if (intentionalDisconnectRef.current) {
+        intentionalDisconnectRef.current = false;
         setStatus('disconnected');
+        return;
       }
-      setIsSpeakingState(false);
+
+      // Unexpected disconnect — surface clear error with reconnect guidance
+      setError(
+        details.message || 'Voice connection lost. Tap "Reconnect" to continue your conversation.'
+      );
+      setStatus('error');
     },
     onError: (message, context) => {
       console.error('ElevenLabs error:', message, context);
-      setError(message);
-      setStatus('error');
+      if (!intentionalDisconnectRef.current) {
+        setError(message);
+        setStatus('error');
+      }
     },
   });
 
   sendContextualUpdateRef.current = conversation.sendContextualUpdate;
 
+  // Bug 3: Reconnect preserving conversation context
+  const reconnect = useCallback(async () => {
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      setError('Unable to reconnect after multiple attempts. Please start a new session.');
+      setStatus('error');
+      return;
+    }
+
+    reconnectAttemptsRef.current++;
+    setStatus('reconnecting');
+    setError(null);
+
+    try {
+      const { data, error: invokeError } = await invokeFunction('elevenlabs-token', {});
+
+      if (invokeError) {
+        throw new Error(`Failed to get token: ${invokeError.message}`);
+      }
+
+      const tokenData = data as { token?: string; agentId?: string } | null;
+      if (!tokenData?.agentId) {
+        throw new Error('Failed to get agent configuration');
+      }
+
+      const sessionConfig: Record<string, unknown> = tokenData.token
+        ? { signedUrl: tokenData.token }
+        : { agentId: tokenData.agentId };
+
+      await conversation.startSession({ ...sessionConfig });
+
+      // Re-inject prior transcript so AI has full conversation context
+      const currentMessages = messagesRef.current;
+      const priorTranscript = currentMessages
+        .filter((m) => m.role !== 'context')
+        .map((m) => {
+          const label = m.role === 'user' ? (m.source === 'text' ? 'User (typed)' : 'User') : 'AI';
+          return `${label}: ${m.content}`;
+        })
+        .join('\n\n');
+
+      if (priorTranscript) {
+        try {
+          conversation.sendContextualUpdate(
+            `[RECONNECTED SESSION - Prior conversation transcript follows. Continue naturally from where you left off.]\n\n${priorTranscript}\n\n[END PRIOR TRANSCRIPT]`
+          );
+          console.log('Prior transcript re-injected after reconnect');
+        } catch (err) {
+          console.warn('Could not re-inject transcript after reconnect:', err);
+        }
+      }
+      // onConnect callback will set status to 'connected' and reset attempts
+    } catch (err) {
+      console.error('Reconnection attempt failed:', err);
+      setError(
+        err instanceof Error ? err.message : 'Reconnection failed. Please try again.'
+      );
+      setStatus('error');
+    }
+  }, [conversation]);
+
   const startConversation = useCallback(
     async (projectContext?: ProjectCard, mode?: 'prd' | 'remix' | 'vision') => {
       setStatus('connecting');
       setError(null);
-      setMessages([]);
+      updateMessages([]);
+      hasDocumentsRef.current = false;
+      reconnectAttemptsRef.current = 0;
 
       const newSessionId = crypto.randomUUID();
       setSessionId(newSessionId);
@@ -293,17 +381,19 @@ export function useElevenLabsConversation() {
         setStatus('error');
       }
     },
-    [conversation]
+    [conversation, updateMessages]
   );
 
-  // B2: Resume a paused conversation
+  // Bug 6: Set status to 'connecting' before the async token fetch, not after
   const resumeConversation = useCallback(
     async (savedMessages: ConversationMessage[], savedSessionId: string, projectContext?: ProjectCard) => {
       setIsResuming(true);
+      setStatus('connecting');
       setError(null);
-      setMessages(savedMessages);
+      updateMessages(savedMessages);
       setSessionId(savedSessionId);
       sessionIdRef.current = savedSessionId;
+      reconnectAttemptsRef.current = 0;
 
       try {
         console.log('Resuming conversation with session ID:', savedSessionId);
@@ -322,8 +412,6 @@ export function useElevenLabsConversation() {
         if (!tokenData?.agentId) {
           throw new Error('Failed to get agent configuration from API');
         }
-
-        setStatus('connecting');
 
         const sessionConfig: Record<string, unknown> = tokenData.token
           ? { signedUrl: tokenData.token }
@@ -360,19 +448,20 @@ export function useElevenLabsConversation() {
         setIsResuming(false);
       }
     },
-    [conversation]
+    [conversation, updateMessages]
   );
 
+  // Bug 3: Mark intentional disconnects so onDisconnect doesn't trigger error state
   const endConversation = useCallback(() => {
+    intentionalDisconnectRef.current = true;
     conversation.endSession().catch((err) => {
       console.warn('Error ending ElevenLabs session:', err);
     });
     setStatus('disconnected');
-    setIsSpeakingState(false);
   }, [conversation]);
 
   const getTranscript = useCallback(() => {
-    return messages
+    return messagesRef.current
       .filter((m) => m.role !== 'context')
       .map((m) => {
         const label = m.role === 'user'
@@ -394,15 +483,19 @@ export function useElevenLabsConversation() {
         return content;
       })
       .join('\n\n');
-  }, [messages]);
+  }, []);
 
+  // Bug 1: toggleMute now actually mutes via controlled micMuted state
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
   }, []);
 
+  // Bug 5: Mark hasDocumentsRef when files are uploaded
   const sendFileContext = useCallback(
     (file: UploadedFile, extractedContent: string) => {
-      setMessages((prev) => [
+      hasDocumentsRef.current = true;
+
+      updateMessages((prev) => [
         ...prev,
         {
           role: 'user',
@@ -427,12 +520,15 @@ export function useElevenLabsConversation() {
 
       return true;
     },
-    [conversation, retrieveAndInjectContext]
+    [conversation, retrieveAndInjectContext, updateMessages]
   );
 
+  // Bug 5: Mark hasDocumentsRef when repos are connected
   const sendRepoContext = useCallback(
     (repo: ConnectedRepo) => {
-      setMessages((prev) => [
+      hasDocumentsRef.current = true;
+
+      updateMessages((prev) => [
         ...prev,
         {
           role: 'user',
@@ -453,14 +549,13 @@ export function useElevenLabsConversation() {
         }
       }
     },
-    [conversation]
+    [conversation, updateMessages]
   );
 
-  // B1: Send a text message during voice session
+  // Bug 2: Use sendUserMessage so typed text is treated as a real user turn
   const sendTextMessage = useCallback(
     (text: string) => {
-      // Add to local messages with text source
-      setMessages((prev) => [
+      updateMessages((prev) => [
         ...prev,
         {
           role: 'user',
@@ -470,29 +565,31 @@ export function useElevenLabsConversation() {
         },
       ]);
 
-      // Inject via sendContextualUpdate with acknowledgment framing
       try {
-        conversation.sendContextualUpdate(
-          `[USER TYPED MESSAGE - Please acknowledge this in your next response]\n\n${text}\n\n[END TYPED MESSAGE]`
-        );
-        console.log('Text message injected via sendContextualUpdate');
+        conversation.sendUserMessage(text);
+        console.log('Text message sent via sendUserMessage');
       } catch (err) {
-        console.warn('Could not inject text message:', err);
+        // Fallback to contextual update if sendUserMessage fails
+        console.warn('sendUserMessage failed, falling back to contextual update:', err);
+        try {
+          conversation.sendContextualUpdate(
+            `[USER TYPED MESSAGE - Please acknowledge this in your next response]\n\n${text}\n\n[END TYPED MESSAGE]`
+          );
+        } catch (fallbackErr) {
+          console.warn('Could not inject text message:', fallbackErr);
+        }
       }
 
-      // Trigger RAG retrieval if text is substantial
       if (text.length > 10 && sessionIdRef.current) {
         retrieveAndInjectContext(text, sessionIdRef.current);
       }
     },
-    [conversation, retrieveAndInjectContext]
+    [conversation, retrieveAndInjectContext, updateMessages]
   );
-
-  const getSessionId = useCallback(() => sessionId, [sessionId]);
 
   return {
     status,
-    isSpeaking: isSpeakingState,
+    isSpeaking: conversation.isSpeaking,
     isMuted,
     messages,
     error,
@@ -501,12 +598,13 @@ export function useElevenLabsConversation() {
     startConversation,
     endConversation,
     resumeConversation,
+    reconnect,
     getTranscript,
     toggleMute,
     sendFileContext,
     sendRepoContext,
     sendTextMessage,
-    getSessionId,
+    getSessionId: useCallback(() => sessionId, [sessionId]),
     setProjectId: (id: string | null) => { projectIdRef.current = id; },
   };
 }

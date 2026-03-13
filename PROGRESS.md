@@ -1,5 +1,43 @@
 # Idealist PRD - Progress Log
 
+## Session: 2026-03-13 (Deep Debug Dive — 8 Bug Fixes)
+
+**Summary:** Deep code review + E2E testing to diagnose why user Daniel experienced the app "stopping talking to him mid-way". Found and fixed 8 bugs across 3 files — 3 critical (likely caused Daniel's issue), 5 moderate.
+
+### Root cause analysis (Daniel's issue)
+Most probable causes:
+1. **Typed messages were invisible to the AI** — `sendContextualUpdate` was used instead of `sendUserMessage`, so the AI treated typed messages as background context and often ignored them
+2. **WebSocket disconnects were silent** — unexpected drops set status to 'disconnected' with no error message, toast, or reconnect option. Voice-first users wouldn't see the UI change.
+3. **Mute was cosmetic-only** — toggling mute only changed the UI; the mic was never actually muted via the ElevenLabs SDK, potentially confusing the AI with unintended audio
+
+### Bugs fixed (3 files, +168/-58 lines)
+
+**`src/hooks/useElevenLabsConversation.ts` (6 fixes)**
+1. **Bug 1 — Fake mute**: Added `micMuted: isMuted` to `useConversation()` — mic now actually mutes via SDK controlled state
+2. **Bug 2 — Text messages ignored**: Replaced `sendContextualUpdate` with `conversation.sendUserMessage(text)` for typed messages, with graceful fallback
+3. **Bug 3 — Silent disconnect**: Added `intentionalDisconnectRef` to distinguish user-initiated vs unexpected disconnects. Unexpected drops now show clear error. Added `reconnect()` function that gets a new token and re-injects the full transcript
+4. **Bug 5 — RAG spam**: Added `hasDocumentsRef` — RAG retrieval only fires after a file or repo is actually uploaded (was firing 4-6 API calls per utterance even without documents)
+5. **Bug 6 — Resume race condition**: Moved `setStatus('connecting')` before the async token fetch in `resumeConversation` (was showing wrong UI state during fetch)
+6. **Bug 7 — Dual state**: Return `conversation.isSpeaking` directly from SDK instead of maintaining separate `isSpeakingState` + syncing via `onModeChange`
+
+**`src/components/SessionView.tsx` (2 fixes)**
+7. **Bug 4 — Stale auto-save**: Added `messagesRef` updated every render; auto-save now uses `() => messagesRef.current` instead of stale closure that captured empty messages array
+8. **Bug 3 (UI)**: Added `reconnecting` status support, "Reconnect" button (with RefreshCw icon) shown when error occurs with existing messages, "Try Again" for fresh sessions
+
+**`src/components/VoiceOrb.tsx` (1 fix)**
+9. **Bug 8 — Jittery animation**: Replaced `Math.random()` in render with fixed heights `[24, 36, 28]` — no more visual jitter on every re-render
+
+### Build verification
+- `npm run build` — clean, 2205 modules, 0 errors
+- Dev server smoke test — HTTP 200
+
+### What remains
+- Deploy to Vercel (auto on push)
+- Ask Daniel to retest with the fixes
+- Monitor for reconnection events in production logs
+
+---
+
 ## Clu Session: 2026-03-12
 
 **Summary:** Fix broken build — remove lovable-tagger from vite.config.ts, run npm install, verify clean build (2205 modules)

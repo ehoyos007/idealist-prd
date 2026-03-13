@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { VoiceOrb } from './VoiceOrb';
 import { ConversationView } from './ConversationView';
@@ -9,7 +9,7 @@ import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { useSessionPersistence } from '@/hooks/useSessionPersistence';
 import { invokeFunction } from '@/lib/supabaseHelpers';
 import { ProjectCard, UploadedFile, ConnectedRepo } from '@/types/project';
-import { Mic, Square, Loader2, Sparkles, Upload, Pause, Eye } from 'lucide-react';
+import { Mic, Square, Loader2, Sparkles, Upload, Pause, Eye, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,7 @@ export function SessionView({
     startConversation,
     endConversation,
     resumeConversation,
+    reconnect,
     getTranscript,
     toggleMute,
     sendFileContext,
@@ -63,13 +64,17 @@ export function SessionView({
 
   const { saveSession, loadSession, startAutoSave, stopAutoSave } = useSessionPersistence();
 
+  // Bug 4: Use ref to avoid stale closure in auto-save interval
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   // B2: Auto-save while connected
   useEffect(() => {
     if (status === 'connected' && sessionId) {
       const visionMeta = sessionMode === 'vision' && visionTargetProject
         ? { sessionMode: 'vision' as const, visionTargetProjectId: visionTargetProject.id, visionTargetProjectName: visionTargetProject.projectName }
         : undefined;
-      startAutoSave(() => messages, sessionId, remixProject?.projectName, visionMeta);
+      startAutoSave(() => messagesRef.current, sessionId, remixProject?.projectName, visionMeta);
     }
     return () => stopAutoSave();
   }, [status, sessionId]);
@@ -455,10 +460,10 @@ export function SessionView({
             </>
           )}
 
-          {status === 'connecting' && (
+          {(status === 'connecting' || status === 'reconnecting') && (
             <Button disabled className="font-mono">
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Connecting...
+              {status === 'reconnecting' ? 'Reconnecting...' : 'Connecting...'}
             </Button>
           )}
 
@@ -496,10 +501,17 @@ export function SessionView({
               <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
-              <Button onClick={handleStart} className="font-mono">
-                <Mic className="h-4 w-4 mr-2" />
-                Try Again
-              </Button>
+              {messages.length > 0 ? (
+                <Button onClick={reconnect} className="font-mono">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reconnect
+                </Button>
+              ) : (
+                <Button onClick={handleStart} className="font-mono">
+                  <Mic className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+              )}
             </>
           )}
         </div>
