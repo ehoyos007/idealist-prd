@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { authenticate } from "../_shared/auth.ts";
+import { guardDocumentAccess, supabaseOwnershipStore } from "../_shared/ownership.ts";
 import { KEYWORD_EXTRACTION_PROMPT } from "../_shared/prompts.ts";
 import { logOpenRouterUsage, logVoyageUsage } from "../_shared/usage.ts";
 
@@ -136,6 +137,11 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // F1: never write into another user's session; stamp ownership so later reads can be scoped
+    const denied = await guardDocumentAccess(supabaseOwnershipStore(supabase), auth, { sessionId });
+    if (denied) return denied;
+    const ownerId = auth.kind === "user" ? auth.userId : null;
+
     console.log(`Chunking document: ${fileName} for session: ${sessionId}`);
 
     const chunks = splitIntoChunks(text, fileName);
@@ -149,6 +155,7 @@ serve(async (req) => {
 
       chunkRecords.push({
         session_id: sessionId,
+        ...(ownerId ? { user_id: ownerId } : {}),
         file_name: fileName,
         file_type: fileType || null,
         chunk_index: i,

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { authenticate } from "../_shared/auth.ts";
+import { guardDocumentAccess, supabaseOwnershipStore } from "../_shared/ownership.ts";
 import { QUERY_KEYWORD_PROMPT, QUERY_EXPANSION_PROMPT } from "../_shared/prompts.ts";
 import { logOpenRouterUsage } from "../_shared/usage.ts";
 
@@ -238,6 +239,10 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // F1: the caller may only read sessions/projects they can see (own, legacy null-owner, shared KB corpus)
+    const denied = await guardDocumentAccess(supabaseOwnershipStore(supabase), auth, { sessionId, projectId: projectId ?? null });
+    if (denied) return denied;
 
     console.log(`Retrieving context for session: ${sessionId}, query: "${query.substring(0, 50)}..."`);
 
