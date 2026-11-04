@@ -1,13 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { validateApiKey } from "../_shared/auth.ts";
+import { authenticate } from "../_shared/auth.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const authError = validateApiKey(req);
-  if (authError) return authError;
+  const auth = await authenticate(req);
+  if (!auth.ok) return auth.response;
 
   try {
     const { sessionId, projectId } = await req.json();

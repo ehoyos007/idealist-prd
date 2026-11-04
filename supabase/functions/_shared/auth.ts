@@ -1,20 +1,30 @@
-import { errorResponse } from './cors.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authenticateWith, type AuthDeps, type AuthResult, type AuthUser } from "./auth-core.ts";
+export { githubUsernameFromIdentity, bearerToken, authenticateWith } from "./auth-core.ts";
+export type { AuthDeps, AuthResult, AuthUser } from "./auth-core.ts";
 
-/**
- * Validates the x-api-key header against IDEALIST_API_SECRET env var.
- * Fails open if secret is not set (dev mode).
- * Returns null if valid, or an error Response if invalid.
- */
-export function validateApiKey(req: Request): Response | null {
-  const secret = Deno.env.get('IDEALIST_API_SECRET');
+let cachedDeps: AuthDeps | null = null;
+export function defaultAuthDeps(): AuthDeps {
+  if (cachedDeps) return cachedDeps;
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const client = url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  cachedDeps = {
+    serviceRoleKey: key,
+    async getUser(token) {
+      if (!client) return null;
+      const { data, error } = await client.auth.getUser(token);
+      return error || !data?.user ? null : (data.user as unknown as AuthUser);
+    },
+    async isAllowedUsername(username) {
+      if (!client) return false;
+      const { data, error } = await client.from("idealist_allowed_users").select("id").ilike("github_username", username.replace(/[\\%_]/g, "\\$&")).limit(1);
+      return !error && !!data && data.length > 0;
+    },
+  };
+  return cachedDeps;
+}
 
-  // Fail open in dev mode (no secret configured)
-  if (!secret) return null;
-
-  const apiKey = req.headers.get('x-api-key');
-  if (!apiKey || apiKey !== secret) {
-    return errorResponse('Unauthorized', 401);
-  }
-
-  return null;
+export function authenticate(req: Request): Promise<AuthResult> {
+  return authenticateWith(req, defaultAuthDeps());
 }

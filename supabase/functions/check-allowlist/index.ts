@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { githubUsernameFromIdentity } from "../_shared/auth.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return corsResponse();
@@ -28,12 +29,13 @@ serve(async (req) => {
       return errorResponse("Invalid auth token", 401);
     }
 
-    const githubUsername = user.user_metadata?.user_name;
+    // Provider-issued identity only: user_metadata is user-editable and must not decide allowlist membership.
+    const githubUsername = githubUsernameFromIdentity(user as never);
     const avatarUrl = user.user_metadata?.avatar_url;
     const displayName = user.user_metadata?.full_name || githubUsername;
 
     if (!githubUsername) {
-      return errorResponse("No GitHub username found in user metadata", 400);
+      return errorResponse("No GitHub identity found for this account", 403);
     }
 
     // Parse optional provider token from request body
@@ -49,7 +51,7 @@ serve(async (req) => {
     const { data: allowlistEntry, error: allowError } = await serviceClient
       .from("idealist_allowed_users")
       .select("id")
-      .eq("github_username", githubUsername)
+      .ilike("github_username", githubUsername.replace(/[\\%_]/g, "\\$&"))
       .maybeSingle();
 
     if (allowError) {
@@ -67,7 +69,8 @@ serve(async (req) => {
       display_name: displayName,
     };
 
-    if (providerToken) {
+    // Only persist the provider token for allowlisted users.
+    if (providerToken && allowed) {
       profileData.github_access_token = providerToken;
     }
 
