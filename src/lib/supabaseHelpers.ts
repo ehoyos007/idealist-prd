@@ -1,23 +1,16 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const API_SECRET = import.meta.env.VITE_IDEALIST_API_SECRET;
-
 /**
- * Invoke a Supabase edge function with the API key header attached.
+ * Invoke a Supabase edge function. Authorization is the signed-in user's access token, which
+ * supabase.functions.invoke attaches automatically; the functions verify it server-side against the
+ * Idealist allowlist (see supabase/functions/_shared/auth.ts). The former VITE_IDEALIST_API_SECRET
+ * x-api-key header was removed: a value compiled into the client bundle is not an authority.
  */
 export async function invokeFunction<T = unknown>(
   name: string,
   body: Record<string, unknown>
 ): Promise<{ data: T | null; error: Error | null }> {
-  const headers: Record<string, string> = {};
-  if (API_SECRET) {
-    headers['x-api-key'] = API_SECRET;
-  }
-
-  const { data, error } = await supabase.functions.invoke(name, {
-    body,
-    headers,
-  });
+  const { data, error } = await supabase.functions.invoke(name, { body });
 
   return { data: data as T | null, error: error ? new Error(error.message) : null };
 }

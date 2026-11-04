@@ -1,13 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { validateApiKey } from "../_shared/auth.ts";
+import { authenticate } from "../_shared/auth.ts";
+import { guardDocumentAccess, supabaseOwnershipStore } from "../_shared/ownership.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const authError = validateApiKey(req);
-  if (authError) return authError;
+  const auth = await authenticate(req);
+  if (!auth.ok) return auth.response;
 
   try {
     const { sessionId, projectId } = await req.json();
@@ -24,6 +25,10 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // F1: both sides of the link must be visible to the caller before any service-role read/write
+    const denied = await guardDocumentAccess(supabaseOwnershipStore(supabase), auth, { sessionId, projectId });
+    if (denied) return denied;
 
     console.log(`Linking documents from session ${sessionId} to project ${projectId}`);
 

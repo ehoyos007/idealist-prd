@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { authenticate } from "../_shared/auth.ts";
 
 const GITHUB_API = "https://api.github.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return corsResponse();
+
+  const auth = await authenticate(req);
+  if (!auth.ok) return auth.response;
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");

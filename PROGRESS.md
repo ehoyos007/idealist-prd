@@ -287,7 +287,7 @@ Most probable causes:
 1. **Pushed 3 migrations** via `supabase db push`: `prd_usage_logs`, `update_match_threshold`, `prd_sessions`
 2. **Fixed `_shared/prompts.ts`** — 22 escaped backticks (`\``) and 22 escaped dollar signs in template literals were corrupting the file. Fixed with byte-level replacement before deploying.
 3. **Deployed all 6 edge functions** with `_shared/` imports (cors, auth, prompts, usage modules)
-4. **Set `IDEALIST_API_SECRET`** in Supabase secrets (`eefb7d180f6f607e1a532bfad023080cee465dc724597104050f17658365331a`)
+4. **Set `IDEALIST_API_SECRET`** in Supabase secrets (value redacted; no longer an authority)
 5. **Committed and pushed** 27 files (+1494/-430 lines) to GitHub main branch
 6. **Set `VITE_IDEALIST_API_SECRET`** in Vercel for production + preview environments
 7. **Triggered production redeploy** to pick up new env var (build: 2187 modules, 8.22s)

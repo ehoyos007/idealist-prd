@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { validateApiKey } from "../_shared/auth.ts";
+import { authenticate } from "../_shared/auth.ts";
 import { embedCode } from "../_shared/voyage-code.ts";
 import { chunkFile, shouldIndexFile, type CodeChunk } from "../_shared/code-chunker.ts";
 import { REPO_DEPTH_CLASSIFICATION_PROMPT, REPO_SUMMARY_PROMPT } from "../_shared/prompts.ts";
@@ -287,8 +287,8 @@ async function generateSummary(
 serve(async (req) => {
   if (req.method === "OPTIONS") return corsResponse();
 
-  const authError = validateApiKey(req);
-  if (authError) return authError;
+  const auth = await authenticate(req);
+  if (!auth.ok) return auth.response;
 
   try {
     // Try to use the authenticated user's GitHub token for private repo access
